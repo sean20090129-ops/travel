@@ -1,0 +1,2144 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>台灣智慧文化旅遊｜3D 地形 × AI 行程</title>
+<style>
+:root{
+  --bg:#071923;--panel:rgba(11,29,39,.94);--panel2:rgba(15,38,49,.96);
+  --line:rgba(177,211,221,.20);--line-strong:rgba(177,211,221,.34);
+  --text:#f4f7f6;--muted:#9fb6bd;--soft:#cbdcdf;
+  --teal:#4f9b9a;--teal2:#73b8b1;--gold:#d6a45b;--gold2:#edc27c;
+  --shadow:0 18px 55px rgba(0,0,0,.32);
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif;color:var(--text)}
+#app{position:fixed;inset:0}
+button,input,textarea,select{font-family:inherit}
+button{width:100%;margin-top:8px;padding:10px 12px;border:1px solid transparent;border-radius:12px;background:var(--teal);color:#fff;font-size:13px;font-weight:700;cursor:pointer;transition:.18s ease}
+button:hover{filter:brightness(1.08);transform:translateY(-1px)}
+button.sec{background:rgba(42,73,83,.9);border-color:var(--line-strong);font-weight:600}
+button.tour{background:linear-gradient(135deg,#c28b43,#dfb66d);color:#18252a}
+button:disabled{opacity:.42;cursor:not-allowed;transform:none}
+#ui{
+  position:fixed;left:18px;top:18px;width:350px;max-height:calc(100% - 36px);overflow:auto;
+  padding:20px;background:linear-gradient(180deg,rgba(9,28,38,.97),rgba(8,25,34,.94));
+  color:var(--text);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);
+  z-index:5;backdrop-filter:blur(18px);scrollbar-width:thin;scrollbar-color:#496873 transparent;
+  transition:transform .35s ease,opacity .35s ease
+}
+#ui::-webkit-scrollbar{width:5px}#ui::-webkit-scrollbar-thumb{background:#496873;border-radius:8px}
+#ui h1{margin:0;font-size:21px;letter-spacing:.02em;font-weight:800}
+#ui .sub{font-size:11px;color:var(--muted);margin:5px 0 18px;line-height:1.5}
+#ui label{display:block;font-size:11px;font-weight:700;margin:13px 0 6px;color:#cfe0e3;letter-spacing:.02em}
+#ui input,#ui textarea,#ui select{width:100%;padding:9px 11px;border-radius:11px;border:1px solid var(--line);background:rgba(19,46,57,.78);color:#eef6f7;font-size:13px;outline:none;transition:border-color .18s,background .18s}
+#ui input:focus,#ui textarea:focus,#ui select:focus{border-color:rgba(115,184,177,.75);background:rgba(21,51,62,.92)}
+#ui textarea{min-height:58px;resize:vertical}
+#ui input::placeholder,#travelSearch input::placeholder{color:#78929a}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.city-box{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;max-height:116px;overflow:auto;padding:9px;background:rgba(19,46,57,.58);border:1px solid var(--line);border-radius:12px;font-size:11px}
+.city-box label{display:flex!important;align-items:center;gap:5px;margin:0!important;font-weight:500!important;color:#cbdcdf!important;cursor:pointer}
+.city-box input{width:auto!important;margin:0!important;accent-color:var(--teal2)}
+.city-actions{display:flex;gap:7px;margin-top:7px}.city-actions button{flex:1}
+button.mini{width:auto;margin:0;padding:6px 10px;font-size:11px;font-weight:600;background:rgba(42,73,83,.78);border:1px solid var(--line)}
+.small{font-size:10px;color:#8199a1;line-height:1.5}
+#ui>label:first-of-type{margin-top:0}
+#ui .section-title{margin:15px 0 7px;padding-top:13px;border-top:1px solid rgba(255,255,255,.07);font-size:10px;font-weight:800;letter-spacing:.12em;color:#82bcb7;text-transform:uppercase}
+#ui .section-title:first-child{margin-top:0;padding-top:0;border-top:0}
+#ui .action-title{margin-top:18px}
+#ui .map-title{margin-top:17px}
+#btnPlan{margin-top:15px}
+#result{margin-top:12px;padding:12px;border-radius:13px;background:rgba(13,39,50,.82);border:1px solid var(--line);font-size:12px;line-height:1.65;white-space:pre-wrap;color:#d8e8e9;min-height:54px}
+#planVisuals{display:grid;gap:9px;margin-top:9px}
+.plan-card{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:8px;border:1px solid var(--line);border-radius:12px;background:rgba(13,39,50,.72);cursor:pointer}
+.plan-card img{width:92px;height:64px;object-fit:cover;border-radius:9px;background:rgba(255,255,255,.06)}
+.plan-card h4{margin:1px 0 3px;font-size:12px;color:#fff2d6}
+.plan-card .pc-meta{font-size:9px;color:#86a4ad;margin-bottom:3px}
+.plan-card p{margin:0;font-size:10px;line-height:1.5;color:#c9dadd;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+#status{display:none}
+#dataSource{margin-top:10px!important;font-size:9px!important;color:#718a92!important;line-height:1.45;opacity:.8}
+#hint{display:none}
+#ui.tour-hidden{transform:translateX(calc(-100% - 30px));pointer-events:none;opacity:0}
+
+/* ===== 地圖上的主要探索區 ===== */
+#travelSearch{position:fixed;top:18px;left:395px;right:395px;z-index:14;display:flex;flex-direction:column;align-items:center;pointer-events:none}
+#travelSearch>*{pointer-events:auto}
+#travelSearch .search-row{display:flex;gap:8px;width:min(620px,100%);padding:7px;background:rgba(7,24,33,.94);border:1px solid rgba(173,214,211,.24);border-radius:15px;box-shadow:0 14px 40px rgba(0,0,0,.28);backdrop-filter:blur(20px)}
+#travelSearch input{flex:1;min-width:0;margin:0;border:0;background:transparent;outline:0;font-size:14px;color:#f4f7f6;padding:8px 9px}
+#travelSearch button{width:auto;margin:0;padding:8px 13px;border-radius:10px}
+#searchResults{width:min(620px,100%);margin:7px auto 0;display:none;max-height:280px;overflow:auto;background:rgba(7,24,33,.985);border:1px solid var(--line);border-radius:15px;box-shadow:0 16px 42px rgba(0,0,0,.34)}
+.search-item{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer}.search-item:last-child{border-bottom:0}.search-item:hover{background:rgba(79,155,154,.12)}.search-item b{color:#f7fbfa;font-size:13px}.search-item span{display:block;font-size:10px;color:#8fa7ae;margin-top:3px}
+#categoryBar{position:fixed;top:72px;left:395px;right:395px;z-index:13;display:flex;justify-content:center;align-items:center;gap:7px;flex-wrap:wrap;overflow:visible;padding:4px 0;pointer-events:auto}
+#categoryBar::-webkit-scrollbar{display:none}
+.cat-btn{white-space:nowrap!important;width:auto!important;margin:0!important;padding:7px 12px!important;border-radius:999px!important;background:rgba(8,25,34,.82)!important;border:1px solid var(--line)!important;font-size:11px!important;color:#c9d9dc!important;box-shadow:0 5px 18px rgba(0,0,0,.13)}
+.cat-btn.active{background:rgba(79,155,154,.9)!important;border-color:rgba(141,205,196,.7)!important;color:#fff!important}
+
+/* ===== 景點資訊 ===== */
+#spotPanel{position:fixed;right:18px;top:145px;width:350px;max-height:min(43vh,480px);overflow:auto;padding:18px 18px 16px;background:linear-gradient(180deg,rgba(9,29,39,.97),rgba(8,25,34,.95));color:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);z-index:6;backdrop-filter:blur(18px);display:none;scrollbar-width:thin;scrollbar-color:#496873 transparent}
+#spotPanel::-webkit-scrollbar{width:5px}#spotPanel::-webkit-scrollbar-thumb{background:#496873;border-radius:8px}
+#spotPanel .badge{display:inline-flex;font-size:10px;padding:4px 9px;border-radius:999px;background:rgba(79,155,154,.16);border:1px solid rgba(115,184,177,.28);color:#a8d7d2;margin-bottom:9px}
+#spotPanel h2{margin:0 0 7px;font-size:20px;line-height:1.35;color:#fff7e8;letter-spacing:.01em}
+#spotPanel .meta{font-size:11px;color:#91aab2;margin-bottom:11px;line-height:1.55}
+#spotPanel .body{font-size:12px;line-height:1.75;color:#d6e5e7;white-space:pre-wrap}
+#spotPanel .tags{margin-top:11px;display:flex;flex-wrap:wrap;gap:6px}
+#spotPanel .tag{font-size:10px;padding:4px 8px;border-radius:8px;background:rgba(26,57,68,.72);color:#b9d5d8;border:1px solid var(--line)}
+#spotPanel .ai-note{margin-top:12px;padding:9px 10px;border-radius:10px;background:rgba(18,47,57,.68);border:1px solid rgba(255,255,255,.06);font-size:10px;color:#819ba2;line-height:1.5}
+#spotPanel .spot-img{width:100%;height:150px;object-fit:cover;border-radius:14px;margin:0 0 12px;background:#102d38;display:block}
+.spot-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px}.spot-actions button{margin:0}.spot-actions .primary{background:linear-gradient(135deg,#c28b43,#dfb66d);color:#18252a}
+.tour-nav{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
+.tour-nav button{margin:0;min-height:38px;border-radius:11px;background:rgba(31,65,76,.92);border:1px solid rgba(157,199,201,.16);color:#eaf5f4;font-weight:700;cursor:pointer}
+.tour-nav button:hover:not(:disabled){background:rgba(53,91,102,.98);transform:translateY(-1px)}
+.tour-nav button:disabled{opacity:.35;cursor:not-allowed}
+.tour-nav .tour-nav-title{grid-column:1/-1;text-align:center;font-size:10px;color:#8faab1;letter-spacing:.06em;margin-bottom:-2px}
+
+/* ===== 行程卡 ===== */
+#itinerary{position:fixed;right:18px;bottom:18px;width:350px;max-height:min(23vh,220px);overflow:auto;z-index:8;display:none;padding:16px 17px;background:linear-gradient(180deg,rgba(9,29,39,.97),rgba(8,25,34,.95));border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);backdrop-filter:blur(18px);scrollbar-width:thin;scrollbar-color:#496873 transparent}
+#itinerary h3{margin:0 0 9px;font-size:15px;font-weight:800;color:#f5f7f5}.it-row{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.07)}.it-row .num{width:24px;height:24px;flex:0 0 24px;border-radius:50%;display:grid;place-items:center;background:rgba(79,155,154,.9);font-size:10px;font-weight:800}.it-row .name{flex:1;min-width:0;font-size:12px;line-height:1.45}.it-row button{width:auto;margin:0;padding:5px 8px;background:rgba(42,73,83,.9);font-size:10px}.it-empty{font-size:11px;color:#819aa2}
+
+#tourBar{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:10;padding:9px 18px;border-radius:999px;background:rgba(9,29,39,.94);color:#eef7f6;font-size:12px;display:none;border:1px solid var(--line-strong);box-shadow:0 10px 30px rgba(0,0,0,.25);backdrop-filter:blur(14px)}
+#tourStop{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:20;display:none;width:auto;margin:0;padding:9px 16px;border-radius:999px;border:1px solid var(--line-strong);background:rgba(9,29,39,.94);color:#fff;font-size:11px;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+#loading{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:#071923}
+#loading box,#loading .box{width:min(410px,90vw);padding:28px;border-radius:22px;background:rgba(10,31,41,.98);border:1px solid var(--line);box-shadow:var(--shadow);text-align:center;color:#d9e9eb}
+#bar{height:7px;border-radius:8px;background:#183641;overflow:hidden;margin-top:16px}#bar i{display:block;height:100%;width:8%;background:linear-gradient(90deg,var(--teal),var(--gold2));transition:width .2s}
+
+@media(max-width:1100px){
+  #travelSearch,#categoryBar{left:395px;right:365px}
+  #spotPanel{width:330px}
+}
+@media(max-width:820px){
+  #ui{left:12px;top:12px;width:min(320px,calc(100vw - 24px));max-height:54vh;padding:16px;border-radius:18px}
+  #travelSearch{left:12px;right:12px;top:calc(54vh + 20px);}
+  #categoryBar{left:12px;right:12px;top:calc(54vh + 76px);justify-content:flex-start}
+  #spotPanel{left:12px;right:12px;top:auto;bottom:12px;width:auto;max-height:48vh;border-radius:18px}
+  #itinerary{bottom:12px;max-height:38vh}
+  #itinerary{left:12px;right:12px;width:auto}
+  #tourStop{left:12px;top:12px}
+}
+@media(max-width:520px){
+  #ui{max-height:51vh}.city-box{grid-template-columns:repeat(2,1fr)}
+  #travelSearch{top:calc(51vh + 16px)}#categoryBar{top:calc(51vh + 72px)}
+  #spotPanel{max-height:50vh}.row2{gap:7px}
+}
+
+/* ===== 正式展示版：固定層級與防重疊 ===== */
+#categoryBar .cat-btn{flex:0 0 auto}
+#travelSearch:has(#searchResults[style*="display: block"]) + #categoryBar{visibility:hidden}
+@media(min-width:821px){
+  #spotPanel{right:18px;top:145px}
+  #itinerary{right:18px;bottom:18px}
+}
+@media(max-width:1100px){
+  #travelSearch,#categoryBar{left:380px;right:380px}
+  #spotPanel{width:320px;top:142px}
+  #itinerary{width:320px}
+}
+@media(max-width:820px){
+  #travelSearch{left:12px;right:12px;top:calc(54vh + 14px)}
+  #categoryBar{left:12px;right:12px;top:calc(54vh + 68px);justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;padding-bottom:5px}
+  #spotPanel{left:12px;right:12px;top:auto;bottom:calc(30vh + 24px);width:auto;max-height:42vh}
+  #itinerary{left:12px;right:12px;bottom:12px;width:auto;max-height:27vh}
+  #tourStop{top:12px}
+}
+@media(max-width:520px){
+  #travelSearch{top:calc(51vh + 12px)}
+  #categoryBar{top:calc(51vh + 66px)}
+  #spotPanel{bottom:calc(27vh + 20px);max-height:45vh}
+  #itinerary{max-height:25vh}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="ui">
+  <h1>🇹🇼 台灣 3D 智慧旅遊</h1>
+  <div class="sub">探索景點 · 規劃行程 · 3D 沉浸式導覽</div>
+
+  <div class="section-title">01　目的地</div>
+  <label>目的地縣市</label>
+  <div id="cityBox" class="city-box">
+    <label><input type="checkbox" name="city" value="基隆">基隆</label>
+    <label><input type="checkbox" name="city" value="台北">台北</label>
+    <label><input type="checkbox" name="city" value="新北">新北</label>
+    <label><input type="checkbox" name="city" value="桃園">桃園</label>
+    <label><input type="checkbox" name="city" value="新竹">新竹</label>
+    <label><input type="checkbox" name="city" value="苗栗">苗栗</label>
+    <label><input type="checkbox" name="city" value="台中">台中</label>
+    <label><input type="checkbox" name="city" value="彰化">彰化</label>
+    <label><input type="checkbox" name="city" value="南投">南投</label>
+    <label><input type="checkbox" name="city" value="雲林">雲林</label>
+    <label><input type="checkbox" name="city" value="嘉義">嘉義</label>
+    <label><input type="checkbox" name="city" value="台南">台南</label>
+    <label><input type="checkbox" name="city" value="高雄">高雄</label>
+    <label><input type="checkbox" name="city" value="屏東">屏東</label>
+    <label><input type="checkbox" name="city" value="宜蘭">宜蘭</label>
+    <label><input type="checkbox" name="city" value="花蓮">花蓮</label>
+    <label><input type="checkbox" name="city" value="台東">台東</label>
+    <label><input type="checkbox" name="city" value="澎湖">澎湖</label>
+  </div>
+  <div class="city-actions">
+    <button type="button" class="mini" id="cityAll">全選</button>
+    <button type="button" class="mini" id="cityNone">清除</button>
+  </div>
+
+  <div class="section-title">02　旅遊偏好</div>
+  <label>旅遊主題</label>
+  <input id="travelTheme" value="" placeholder="例如：鹿野熱氣球、親子自然之旅、台南古蹟之旅">
+  <label>其他關鍵字</label>
+  <input id="keywords" value="" placeholder="例如：鹿野、看日出、拍照、平價、美食">
+
+  <div class="row2">
+    <div>
+      <label>天數</label>
+      <input id="days" type="number" min="1" max="7" value="2">
+    </div>
+    <div>
+      <label>交通</label>
+      <input id="transport" value="大眾運輸" placeholder="自駕 / 台鐵…">
+    </div>
+  </div>
+  <div class="row2">
+    <div>
+      <label>人數</label>
+      <input id="people" type="number" min="1" value="2">
+    </div>
+    <div>
+      <label>成員</label>
+      <input id="members" value="" placeholder="成員類型">
+    </div>
+  </div>
+  <label>旅遊偏好</label>
+  <textarea id="extra" placeholder="旅遊偏好"></textarea>
+
+  <input type="hidden" id="ollamaUrl" value="http://localhost:11434">
+  <input type="hidden" id="ollamaModel" value="qwen3:8b">
+
+  <div class="section-title action-title">03　開始規劃</div>
+  <button id="btnPlan">✨ 產生智慧行程</button>
+  <button class="tour" id="btnTour" disabled>▶ 開始 3D 導覽</button>
+  <button class="sec" id="btnReset">重設視角</button>
+  <div class="section-title map-title">地圖圖層</div>
+  <div class="row2" style="margin-top:6px">
+    <label style="font-weight:500"><input type="checkbox" id="roads" checked> 道路</label>
+    <label style="font-weight:500"><input type="checkbox" id="labels" checked> 縣市名</label>
+  </div>
+  <div class="row2">
+    <label style="font-weight:500"><input type="checkbox" id="towns" checked> 鄉鎮名</label>
+  </div>
+  
+
+  <div id="result">尚未建立行程</div>
+  <div id="planVisuals"></div>
+  <div id="status">準備載入地形…</div>
+  <div id="dataSource" style="margin-top:7px;font-size:10px;color:#6f8798">景點資料：觀光署開放資料（載入中）</div>
+</div>
+<div id="tourBar"></div>
+<button type="button" id="tourStop">■ 結束導覽</button>
+<div id="spotPanel">
+  <div class="badge" id="spotBadge">景點介紹</div>
+  <img class="spot-img" id="spotImg" alt="" style="display:none">
+  <h2 id="spotTitle">—</h2>
+  <div class="meta" id="spotMeta"></div>
+  <div class="body" id="spotBody"></div>
+  <div class="tags" id="spotTags"></div>
+  <div class="ai-note" id="spotAiNote">AI 解說</div>
+</div>
+<div id="travelSearch">
+  <div class="search-row">
+    <input id="spotSearch" placeholder="🔍 搜尋景點或城市">
+    <button class="sec" id="clearSearch">清除</button>
+  </div>
+  <div id="searchResults"></div>
+</div>
+<div id="categoryBar">
+  <button class="cat-btn active" data-cat="全部">✨ 全部</button>
+  <button class="cat-btn" data-cat="山林">⛰️ 山林</button>
+  <button class="cat-btn" data-cat="海岸">🌊 海岸</button>
+  <button class="cat-btn" data-cat="文化">🏛️ 文化</button>
+  <button class="cat-btn" data-cat="美食">🍜 美食</button>
+  <button class="cat-btn" data-cat="溫泉">♨️ 溫泉</button>
+  <button class="cat-btn" data-cat="親子">👨‍👩‍👧 親子</button>
+  <button class="cat-btn" data-cat="教育">🎓 教育</button>
+  <button class="cat-btn" data-cat="夜景">🌃 夜景</button>
+</div>
+<div id="itinerary">
+  <h3>🧳 我的行程 <span id="itCount" style="font-size:11px;color:#8fa7b8;font-weight:400"></span></h3>
+  <div id="itList"><div class="it-empty">尚未加入景點</div></div>
+  <button class="tour" id="btnItTour" style="margin-top:9px">▶ 3D 行程導覽</button>
+  <button class="sec" id="btnItClear">清空行程</button>
+</div>
+<div id="loading"><div class="box">
+  <div style="font-size:22px">🗺️</div>
+  <div style="margin:8px 0;font-size:16px;color:#fff">載入台灣 3D 地形</div>
+  <div id="loadText" style="font-size:13px">準備中…</div>
+  <div id="bar"><i></i></div>
+</div></div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+import * as topojson from 'https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/+esm';
+import { unzipSync, strFromU8 } from 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js';
+
+const $ = s => document.querySelector(s);
+const statusEl = $('#status');
+const msg = s => { statusEl.textContent = s; };
+const loadText = $('#loadText');
+const bar = document.querySelector('#bar i');
+
+// 景點內容由 Ollama 產生；座標用對照表校正（避免模型估錯導致標點跑掉）
+const POI_COORDS = {
+  '太魯閣':[121.605,24.158],'太魯閣國家公園':[121.605,24.158],'九份':[121.843,25.109],'九份老街':[121.843,25.109],
+  '金瓜石':[121.857,25.108],'野柳':[121.690,25.205],'野柳地質公園':[121.690,25.205],'淡水':[121.445,25.169],
+  '淡水老街':[121.445,25.169],'故宮':[121.5485,25.1024],'國立故宮博物院':[121.5485,25.1024],
+  '士林夜市':[121.524,25.088],'西門町':[121.508,25.042],'台北101':[121.5645,25.0339],
+  '龍山寺':[121.499,25.037],'北投':[121.508,25.137],'烏來':[121.551,24.863],'十分':[121.775,25.043],
+  '十分老街':[121.775,25.043],'平溪':[121.739,25.026],'大溪':[121.287,24.881],
+  '北埔':[121.058,24.699],'北埔老街':[121.058,24.699],'南庄':[120.996,24.597],
+  '台中車站':[120.685,24.137],'逢甲夜市':[120.646,24.179],'高美濕地':[120.549,24.311],
+  '彩虹眷村':[120.609,24.134],'鹿港':[120.434,24.057],'鹿港老街':[120.434,24.057],
+  '溪頭':[120.798,23.670],'日月潭':[120.910,23.850],'清境':[121.160,24.050],'清境農場':[121.160,24.050],
+  '埔里':[120.968,23.967],'集集':[120.785,23.829],'玉山':[120.9595,23.470],
+  '阿里山':[120.800,23.510],'奮起湖':[120.695,23.505],
+  '安平':[120.160,23.001],'安平古堡':[120.160,23.001],'赤崁樓':[120.203,22.997],
+  '神農街':[120.197,22.997],'奇美博物館':[120.276,22.935],
+  '駁二':[120.281,22.620],'駁二藝術特區':[120.281,22.620],'西子灣':[120.265,22.627],
+  '旗津':[120.270,22.613],'蓮池潭':[120.295,22.682],'美濃':[120.541,22.898],
+  '墾丁':[120.796,21.948],'墾丁大街':[120.796,21.948],'鵝鑾鼻':[120.853,21.902],
+  '南灣':[120.757,21.958],'恆春':[120.745,22.002],
+  '原住民族文化園區':[120.651,22.793],'霧台':[120.733,22.744],
+  '宜蘭傳藝':[121.824,24.686],'傳藝中心':[121.824,24.686],'羅東夜市':[121.767,24.677],
+  '幾米廣場':[121.758,24.754],'礁溪':[121.775,24.827],
+  '七星潭':[121.630,24.028],'瑞穗':[121.377,23.497],'玉里':[121.317,23.335],
+  '池上':[121.215,23.122],'伯朗大道':[121.215,23.122],'三仙台':[121.408,23.126],
+  '知本':[121.026,22.708],'都蘭':[121.230,22.878],'馬公':[119.566,23.565],'澎湖':[119.566,23.565]
+};
+
+// ===== 旅遊網站的固定景點資料 =====
+// AI 只負責「挑選與排序」，座標與基本資訊由網站掌握，避免小模型亂編座標。
+let TRAVEL_SPOTS = [
+  ['日月潭','南投','山林,親子','湖景、單車、自然','台灣最具代表性的高山湖泊之一，適合環湖、搭船與慢遊。'],
+  ['九份','新北','文化,夜景','老街、夜景、文化','山城老街與海景相互交織，適合傍晚開始一路逛到夜景。'],
+  ['阿里山','嘉義','山林,文化','日出、森林、鐵道','森林鐵路、雲海與日出是阿里山最具代表性的旅行體驗。'],
+  ['太魯閣國家公園','花蓮','山林','峽谷、山景、步道','以大理岩峽谷與高山景觀聞名，適合自然景觀與戶外旅行。'],
+  ['墾丁','屏東','海岸,親子','海灘、海景、戶外','台灣南端的海岸旅遊區，適合海景、沙灘與戶外活動。'],
+  ['淡水老街','新北','海岸,美食,文化','夕陽、美食、老街','淡水河岸與老街相鄰，適合散步、吃小吃與看夕陽。'],
+  ['安平古堡','台南','文化','古蹟、歷史、老街','台南重要歷史景點，可串聯安平老街與周邊古蹟。'],
+  ['清境農場','南投','山林,親子','高山、草原、自然','高山景觀與開闊草原相結合，適合家庭與自然旅行。'],
+  ['七星潭','花蓮','海岸','海景、礫石灘、日出','花蓮著名海岸景觀，適合看海、散步與欣賞日出。'],
+  ['野柳地質公園','新北','海岸','地質、海岸、自然','以特殊海岸地形與岩石景觀聞名，是北海岸代表性景點。'],
+  ['駁二藝術特區','高雄','文化,親子','藝術、展覽、港灣','港區藝術空間，適合展覽、拍照與城市散步。'],
+  ['鵝鑾鼻','屏東','海岸','燈塔、海景、自然','台灣最南端代表性景點之一，可欣賞海岸與燈塔景觀。'],
+  ['礁溪','宜蘭','溫泉,美食','溫泉、休閒、美食','宜蘭著名溫泉旅遊區，適合泡湯與安排輕鬆行程。'],
+  ['士林夜市','台北','美食,夜景','夜市、小吃、城市','台北代表性夜市之一，適合晚餐與夜間逛街。'],
+  ['台北101','台北','夜景,親子','城市、觀景、購物','台北代表性地標，可結合信義商圈安排城市旅遊。'],
+  ['鹿港老街','彰化','文化,美食','古蹟、老街、小吃','傳統街區與古蹟密集，適合文化散步與地方美食。'],
+  ['高美濕地','台中','海岸','夕陽、濕地、攝影','台中海岸代表景觀，常被安排在夕陽時段參觀。'],
+  ['溪頭','南投','山林,親子','森林、步道、自然','以森林景觀與步道聞名，適合避暑與自然體驗。'],
+  ['三仙台','台東','海岸','海景、步道、自然','東海岸代表景點，跨海步橋與海岸景觀相當有特色。'],
+  ['伯朗大道','台東','山林','田野、單車、攝影','池上著名田野景觀，適合單車與慢遊。'],
+  ['羅東夜市','宜蘭','美食,夜景','夜市、小吃','宜蘭代表性夜市，適合晚上安排地方小吃。'],
+  ['烏來','新北','山林,溫泉,文化','山林、溫泉、原民','近郊山林與溫泉旅遊區，可安排自然與文化體驗。'],
+  ['北投','台北','溫泉,文化','溫泉、博物館、城市','台北近郊溫泉區，可安排半日或一日輕旅行。'],
+  ['奇美博物館','台南','文化,親子','博物館、藝術','適合藝術、建築與親子行程的台南文化景點。'],
+  ['旗津','高雄','海岸,美食','海岸、單車、小吃','可搭渡輪前往的高雄海岸區，適合單車與海鮮小吃。']
+].map(([name,city,cats,tags,desc])=>({name,city,cats:cats.split(','),tags:tags.split('、'),desc}));
+const spotByName = new Map(TRAVEL_SPOTS.map(s=>[s.name,s]));
+let activeCategory = '全部';
+let itinerary = [];
+
+function resolveCoords(name, city, lon, lat) {
+  const n = (name || '').replace(/\s/g, '');
+  if (POI_COORDS[n]) return { lon: POI_COORDS[n][0], lat: POI_COORDS[n][1], fixed: true };
+  const keys = Object.keys(POI_COORDS).sort((a, b) => b.length - a.length);
+  for (const k of keys) {
+    if (n.includes(k) || k.includes(n)) return { lon: POI_COORDS[k][0], lat: POI_COORDS[k][1], fixed: true };
+  }
+  const cityCenters = {
+    '台北':[121.56,25.04],'臺北':[121.56,25.04],'新北':[121.46,25.02],'基隆':[121.74,25.13],
+    '桃園':[121.30,24.99],'新竹':[120.97,24.81],'苗栗':[120.82,24.56],'台中':[120.67,24.15],'臺中':[120.67,24.15],
+    '彰化':[120.54,24.08],'南投':[120.68,23.91],'雲林':[120.54,23.71],'嘉義':[120.45,23.48],
+    '台南':[120.21,22.99],'臺南':[120.21,22.99],'高雄':[120.30,22.63],'屏東':[120.49,22.67],
+    '宜蘭':[121.75,24.75],'花蓮':[121.61,23.99],'台東':[121.14,22.76],'臺東':[121.14,22.76],
+    '澎湖':[119.57,23.57]
+  };
+  const c = (city || '') + n;
+  for (const [ck, xy] of Object.entries(cityCenters)) {
+    if (c.includes(ck)) {
+      if (Number.isFinite(lon) && Number.isFinite(lat) && lon >= 119.3 && lon <= 122.1 && lat >= 21.8 && lat <= 25.4) {
+        if (Math.abs(lon - xy[0]) < 0.35 && Math.abs(lat - xy[1]) < 0.35) return { lon, lat, fixed: false };
+      }
+      return { lon: xy[0], lat: xy[1], fixed: true };
+    }
+  }
+  if (Number.isFinite(lon) && Number.isFinite(lat) && lon >= 119.3 && lon <= 122.1 && lat >= 21.8 && lat <= 25.4) {
+    return { lon, lat, fixed: false };
+  }
+  return null;
+}
+
+
+// [名稱, 經度, 緯度, 是否主要(字較大)]
+const CITIES = [
+  // 縣市層級：只放真正的直轄市／市／縣，不把斗六市混進縣市清單。
+  ['基隆市',121.74,25.13,1],['臺北市',121.56,25.04,1],['新北市',121.46,25.02,1],
+  ['桃園市',121.30,24.99,1],['新竹市',120.97,24.81,1],['新竹縣',121.00,24.84,1],
+  ['苗栗縣',120.82,24.56,1],['臺中市',120.67,24.15,1],['彰化縣',120.54,24.08,1],
+  ['南投縣',120.68,23.91,1],['雲林縣',120.54,23.71,1],['嘉義市',120.45,23.48,1],
+  ['嘉義縣',120.33,23.46,1],['臺南市',120.21,22.99,1],['高雄市',120.30,22.63,1],
+  ['屏東縣',120.49,22.67,1],['宜蘭縣',121.75,24.75,1],['花蓮縣',121.61,23.99,1],
+  ['臺東縣',121.14,22.76,1],['澎湖縣',119.57,23.57,1],
+  // 北台灣市鎮／景點
+  ['淡水',121.45,25.17,0],['九份',121.84,25.11,0],['金瓜石',121.86,25.11,0],
+  ['野柳',121.69,25.21,0],['板橋',121.46,25.01,0],['中壢',121.22,24.95,0],
+  ['竹北',121.00,24.84,0],['烏來',121.55,24.86,0],['十分',121.78,25.04,0],
+  // 中台灣
+  ['豐原',120.72,24.25,0],['員林',120.57,23.96,0],['鹿港',120.43,24.06,0],
+  ['埔里',120.97,23.97,0],['日月潭',120.91,23.85,0],['清境',121.16,24.05,0],
+  ['竹山',120.68,23.76,0],['集集',120.78,23.83,0],['阿里山',120.80,23.51,0],
+  ['北埔',121.06,24.70,0],['南庄',121.00,24.60,0],
+  // 南台灣
+  ['安平',120.16,23.00,0],['新營',120.29,23.31,0],['鳳山',120.36,22.63,0],
+  ['美濃',120.54,22.90,0],['恆春',120.74,22.00,0],['墾丁',120.80,21.95,0],
+  ['東港',120.45,22.47,0],['潮州',120.54,22.55,0],
+  // 東台灣
+  ['羅東',121.77,24.68,0],['蘇澳',121.84,24.59,0],['太魯閣',121.61,24.16,0],
+  ['玉里',121.32,23.33,0],['池上',121.22,23.12,0],['成功',121.38,23.10,0],
+  ['關山',121.16,23.05,0],['瑞穗',121.38,23.50,0],
+  // 地標
+  ['玉山',120.96,23.47,1],['合歡山',121.27,24.14,0]
+];
+
+// ===== Three.js =====
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x06131e);
+scene.fog = new THREE.Fog(0x06131e, 900, 2400);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 5000);
+camera.position.set(0, 300, 380);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+$('#app').appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.055;
+controls.minDistance = 50;
+controls.maxDistance = 1400;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.target.set(0, 20, 0);
+
+scene.add(new THREE.HemisphereLight(0xd8edff, 0x26341e, 1.35));
+const sun = new THREE.DirectionalLight(0xffedcf, 2.6);
+sun.position.set(-450, 900, 350);
+scene.add(sun);
+
+const group = new THREE.Group();
+scene.add(group);
+const labelGroup = new THREE.Group();
+const routeGroup = new THREE.Group();
+const cityLabelGroup = new THREE.Group();
+const townLabelGroup = new THREE.Group(); // 全台鄉鎮（開放資料）
+const roadVectorGroup = new THREE.Group();
+roadVectorGroup.name = 'vectorRoads';
+const poiGroup = new THREE.Group();
+const tourTargetGroup = new THREE.Group(); // 3D 導覽中只顯示目前目標地名
+group.add(labelGroup, routeGroup, cityLabelGroup, townLabelGroup, roadVectorGroup, poiGroup, tourTargetGroup);
+
+const B = { west: 119.45, east: 122.05, south: 21.85, north: 25.35 };
+const midLon = (B.west + B.east) / 2;
+const midLat = (B.south + B.north) / 2;
+const mLat = 111320;
+const mLon = 111320 * Math.cos(midLat * Math.PI / 180);
+const widthM = (B.east - B.west) * mLon;
+const heightM = (B.north - B.south) * mLat;
+const SCENE = 900;
+const groundScale = SCENE / Math.max(widthM, heightM);
+// 垂直高度放低：避免山體過度誇張（1× 時約為展示用溫和起伏）
+const elevBase = 0.022;
+
+const lonX = lon => (lon - midLon) * mLon * groundScale;
+const latZ = lat => -(lat - midLat) * mLat * groundScale;
+const elevY = (h, ex = 1) => Math.max(0, h) * elevBase * ex;
+
+let currentEx = 1.0;
+let terrainInfo = null;
+let landPolys = [];
+let roadMesh = null;
+let tourList = [];
+let tourPlaying = false;
+let currentTransport = '大眾運輸';
+let tourPhase = 'stay'; // stay | zoomOut | fly | zoomIn | manualFly
+let focusedSpotOnly = false;
+let manualFlyFrom = null, manualFlyTo = null;
+let manualFlyTargetIndex = -1;
+
+let pathPts = [];
+let seg = 0, segT = 0;
+
+function webMerc(lon, lat, z) {
+  const n = 2 ** z;
+  const x = (lon + 180) / 360 * n;
+  const r = lat * Math.PI / 180;
+  const y = (1 - Math.asinh(Math.tan(r)) / Math.PI) / 2 * n;
+  return [x, y];
+}
+
+function colorElev(h) {
+  const s = [
+    [0,[18,128,60]],[200,[63,166,53]],[600,[105,185,43]],[1000,[215,215,40]],
+    [1600,[245,165,12]],[2400,[222,77,3]],[3200,[125,31,28]],[3950,[245,243,218]]
+  ];
+  for (let i = 1; i < s.length; i++) {
+    if (h <= s[i][0]) {
+      const a = s[i-1], b = s[i], t = (h - a[0]) / (b[0] - a[0] || 1);
+      return new THREE.Color(
+        (a[1][0]+(b[1][0]-a[1][0])*t)/255,
+        (a[1][1]+(b[1][1]-a[1][1])*t)/255,
+        (a[1][2]+(b[1][2]-a[1][2])*t)/255
+      );
+    }
+  }
+  return new THREE.Color(0xf5f3dc);
+}
+
+function pointInPoly(x, z, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i][0], zi = poly[i][1], xj = poly[j][0], zj = poly[j][1];
+    if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi + 1e-12) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+async function getBoundary() {
+  loadText.textContent = '① 載入島界…';
+  bar.style.width = '10%';
+  const r = await fetch('https://cdn.jsdelivr.net/npm/taiwan-atlas@2021.9.20/nation-10t.json', { cache: 'no-store' });
+  if (!r.ok) throw new Error('島界失敗');
+  const topo = await r.json();
+  const obj = topo.objects.nation || Object.values(topo.objects).find(o => o && o.type);
+  let geometry;
+  if (obj.type === 'GeometryCollection') {
+    geometry = topojson.merge(topo, obj.geometries || []);
+  } else {
+    geometry = topojson.feature(topo, obj).geometry;
+  }
+  return { type: 'Feature', geometry };
+}
+
+function polygonRings(feature) {
+  const g = feature.geometry;
+  if (g.type === 'Polygon') return g.coordinates;
+  if (g.type === 'MultiPolygon') {
+    const out = [];
+    g.coordinates.forEach(p => out.push(...p));
+    return out;
+  }
+  return [];
+}
+
+async function loadTile(z, x, y) {
+  const u = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
+  const im = new Image();
+  im.crossOrigin = 'anonymous';
+  im.src = u;
+  await new Promise((res, rej) => { im.onload = res; im.onerror = () => rej(new Error('tile')); });
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(im, 0, 0);
+  return ctx.getImageData(0, 0, 256, 256).data;
+}
+
+async function buildDEM(boundary) {
+  loadText.textContent = '② 載入高解析真實 DEM…';
+  // 提高網格與 DEM 層級，減少海岸鋸齒（首次載入會稍慢）
+  const z = 10, nx = 360, nz = 600;
+  const corners = [
+    webMerc(B.west, B.north, z), webMerc(B.east, B.north, z),
+    webMerc(B.west, B.south, z), webMerc(B.east, B.south, z)
+  ];
+  const x0 = Math.floor(corners[0][0]), x1 = Math.floor(corners[1][0]);
+  const y0 = Math.floor(corners[0][1]), y1 = Math.floor(corners[2][1]);
+  const jobs = [];
+  for (let tx = x0; tx <= x1; tx++)
+    for (let ty = y0; ty <= y1; ty++) jobs.push([tx, ty]);
+
+  const tiles = new Map();
+  for (let s = 0; s < jobs.length; s += 8) {
+    const batch = jobs.slice(s, s + 8);
+    loadText.textContent = `② DEM ${Math.min(s + batch.length, jobs.length)}/${jobs.length}`;
+    bar.style.width = (15 + 50 * Math.min(s + batch.length, jobs.length) / jobs.length) + '%';
+    const data = await Promise.all(
+      batch.map(([tx, ty]) => loadTile(z, tx, ty).then(d => [tx, ty, d]).catch(() => [tx, ty, null]))
+    );
+    data.forEach(([tx, ty, d]) => { if (d) tiles.set(tx + ',' + ty, d); });
+  }
+
+  function elev(lon, lat) {
+    const [xx, yy] = webMerc(lon, lat, z);
+    const tx = Math.floor(xx), ty = Math.floor(yy);
+    const d = tiles.get(tx + ',' + ty);
+    if (!d) return 0;
+    const fx = (xx - tx) * 256, fy = (yy - ty) * 256;
+    const xA = Math.max(0, Math.min(255, Math.floor(fx)));
+    const yA = Math.max(0, Math.min(255, Math.floor(fy)));
+    const xB = Math.min(255, xA + 1), yB = Math.min(255, yA + 1);
+    const txf = fx - xA, tyf = fy - yA;
+    const H = (x, y) => {
+      const k = (y * 256 + x) * 4;
+      return Math.max(0, (d[k] * 256 + d[k + 1] + d[k + 2] / 256) - 32768);
+    };
+    return H(xA,yA)*(1-txf)*(1-tyf)+H(xB,yA)*txf*(1-tyf)+H(xA,yB)*(1-txf)*tyf+H(xB,yB)*txf*tyf;
+  }
+
+  const rings = polygonRings(boundary);
+  landPolys = rings.map(r => r.map(p => [lonX(p[0]), latZ(p[1])]));
+
+  const nx1 = nx + 1;
+  const pos = [], cols = [], ids = [], baseY = [], uvs = [];
+  for (let j = 0; j <= nz; j++) {
+    const lat = B.north - (B.north - B.south) * j / nz;
+    const v = j / nz; // 北→南對應貼圖 V
+    for (let i = 0; i <= nx; i++) {
+      const lon = B.west + (B.east - B.west) * i / nx;
+      const u = i / nx; // 西→東對應貼圖 U
+      const h = Math.max(0, elev(lon, lat));
+      const y0 = elevY(h, 1);
+      baseY.push(y0);
+      pos.push(lonX(lon), y0 * currentEx, latZ(lat));
+      // WMS 影像與經緯矩形對齊的 UV（道路貼圖必要）
+      uvs.push(u, 1 - v);
+      const c = colorElev(h);
+      cols.push(c.r, c.g, c.b);
+    }
+  }
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      const a = j * nx1 + i, b = a + 1, c = a + nx1, d = c + 1;
+      const lon = B.west + (B.east - B.west) * (i + 0.5) / nx;
+      const lat = B.north - (B.north - B.south) * (j + 0.5) / nz;
+      if (landPolys.some(p => pointInPoly(lonX(lon), latZ(lat), p)))
+        ids.push(a, c, b, b, c, d);
+    }
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  g.setIndex(ids);
+  g.computeVertexNormals();
+  const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.9, metalness: 0, side: THREE.DoubleSide
+  }));
+  group.add(mesh);
+  return { mesh, elev, baseY: new Float32Array(baseY), geometry: g };
+}
+
+// 依內政部 ROAD 原始色調分組上色（圖層本身用不同顏色畫不同等級）
+function colorizeRoadsByType(image) {
+  const c = document.createElement('canvas');
+  c.width = image.width;
+  c.height = image.height;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(image, 0, 0);
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2], a = d[i + 3];
+    if (a < 12) {
+      d[i + 3] = 0;
+      continue;
+    }
+    const isPink = g < 210 && b > 150 && Math.abs(g - b) < 45;
+    const isOrange = b < 150 && g > 180;
+    if (isPink) {
+      d[i] = 255; d[i + 1] = 110; d[i + 2] = 120; // 主要／省道感
+    } else if (isOrange) {
+      d[i] = 255; d[i + 1] = 140; d[i + 2] = 40;  // 重要幹道
+    } else {
+      d[i] = 255; d[i + 1] = 236; d[i + 2] = 170; // 一般道路
+    }
+    d[i + 3] = Math.min(255, Math.max(210, a + 40));
+  }
+  ctx.putImageData(img, 0, 0);
+  const c2 = document.createElement('canvas');
+  c2.width = c.width;
+  c2.height = c.height;
+  const ctx2 = c2.getContext('2d');
+  ctx2.drawImage(c, 0, 0);
+  ctx2.globalAlpha = 0.45;
+  ctx2.drawImage(c, 1, 0);
+  ctx2.drawImage(c, -1, 0);
+  ctx2.drawImage(c, 0, 1);
+  ctx2.drawImage(c, 0, -1);
+  ctx2.globalAlpha = 1;
+  return c2;
+}
+
+async function loadNlscImage(layerName, width=1600, height=2400) {
+  const url =
+    'https://wms.nlsc.gov.tw/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap' +
+    `&LAYERS=${layerName}&STYLES=&SRS=EPSG:4326` +
+    `&BBOX=${B.west},${B.south},${B.east},${B.north}` +
+    '&WIDTH=2400&HEIGHT=3600&FORMAT=image/png&TRANSPARENT=TRUE';
+  const im = new Image();
+  im.crossOrigin = 'anonymous';
+  im.src = url;
+  await new Promise((res, rej) => {
+    im.onload = res;
+    im.onerror = () => rej(new Error('WMS 載入失敗 ' + layerName));
+  });
+  return im;
+}
+
+async function tryNlscRoadLayer(yOffset = 1.6, width=1600, height=2400) {
+  // 只用 ROAD：有路、幾乎沒有電子地圖地名
+  const im = await loadNlscImage('ROAD', width, height);
+  const source = colorizeRoadsByType(im);
+  const tex = new THREE.CanvasTexture(source);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.flipY = true;
+  tex.needsUpdate = true;
+
+  const g = terrainInfo.geometry.clone();
+  if (!g.attributes.uv) throw new Error('地形缺少 UV，無法貼道路');
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) + yOffset);
+  p.needsUpdate = true;
+
+  const mesh = new THREE.Mesh(
+    g,
+    new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity: 1.0,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2
+    })
+  );
+  mesh.renderOrder = 20;
+  mesh.name = 'nlscRoad';
+  return mesh;
+}
+
+async function loadRoads() {
+  // 正式版不再把全台道路一次送進 Overpass。
+  // Overpass 對全台 highway 查詢容易因資料量／伺服器負載卡住，
+  // 改用 NLSC ROAD WMS：直接取得道路圖層，城市道路與主要幹道都會保留。
+  loadText.textContent = '③ 載入道路路網…';
+  bar.style.width = '88%';
+  roadVectorGroup.clear();
+  if (roadMesh) {
+    group.remove(roadMesh);
+    roadMesh = null;
+  }
+
+  const timeout = ms => new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('道路服務逾時')), ms)
+  );
+
+  try {
+    // 1600×2400 足夠展示全台道路，也比原本 2400×3600 更快。
+    const roadPromise = tryNlscRoadLayer(1.6, 1600, 2400);
+    roadMesh = await Promise.race([roadPromise, timeout(12000)]);
+    roadMesh.name = 'nlscRoad';
+    roadMesh.visible = !!$('#roads')?.checked;
+    group.add(roadMesh);
+    msg('道路路網已載入');
+    return true;
+  } catch (e) {
+    console.warn('NLSC ROAD 載入失敗：', e);
+    msg('道路暫時無法載入，已略過，不影響網站使用');
+    return false;
+  }
+}
+
+function makeLabel(text, lon, lat, color = '#fff', scale = 1, major = false) {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 512, 128);
+  ctx.font = (major ? 'bold 48px' : 'bold 36px') + ' Microsoft JhengHei, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = major ? 10 : 8;
+  ctx.strokeStyle = 'rgba(0,0,0,0.78)';
+  ctx.strokeText(text, 256, 64);
+  ctx.fillStyle = color;
+  ctx.fillText(text, 256, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthTest: false, depthWrite: false,
+    sizeAttenuation: true
+  });
+  const sp = new THREE.Sprite(mat);
+  const h = terrainInfo ? terrainInfo.elev(lon, lat) : 0;
+  // 明顯浮空，拉近也看得到
+  const floatY = elevY(h, currentEx) + (major ? 42 : 32);
+  sp.position.set(lonX(lon), floatY, latZ(lat));
+  const sc = major ? 1.25 : 0.95;
+  sp.scale.set(62 * scale * sc, 16 * scale * sc, 1);
+  sp.renderOrder = 200;
+  return sp;
+}
+
+function addCityLabels() {
+  while (cityLabelGroup.children.length) cityLabelGroup.remove(cityLabelGroup.children[0]);
+  CITIES.forEach(([name, lon, lat, major]) => {
+    // 正式版只保留縣市／主要地標；一般鄉鎮交給 LOD 顯示，避免滿版文字。
+    if (!major) return;
+    cityLabelGroup.add(makeLabel(name, lon, lat, '#fff8e0', 0.78, true));
+  });
+  cityLabelGroup.visible = true;
+}
+
+// 全台約 371 鄉鎮市區（開放資料 position.json）
+async function loadAllTowns() {
+  loadText.textContent = '④ 載入全台鄉鎮地名…';
+  try {
+    const r = await fetch(
+      'https://cdn.jsdelivr.net/gh/xue-yuan/tw-area-json@main/position.json',
+      { cache: 'force-cache' }
+    );
+    if (!r.ok) throw new Error('鄉鎮資料 HTTP ' + r.status);
+    const list = await r.json();
+    while (townLabelGroup.children.length) townLabelGroup.remove(townLabelGroup.children[0]);
+
+    list.forEach(item => {
+      const lon = item.location?.lng;
+      const lat = item.location?.lat;
+      if (lon == null || lat == null) return;
+      // 略過金馬過遠點（畫面外）
+      if (lon < B.west - 0.2 || lon > B.east + 0.2) return;
+      if (lat < B.south - 0.2 || lat > B.north + 0.2) return;
+
+      let short = item.name || '';
+      // 「臺北市中正區」→「中正區」
+      short = short.replace(/^(.{2,3}[市縣])/, '');
+      if (!short) short = item.name;
+
+      const h = terrainInfo ? terrainInfo.elev(lon, lat) : 0;
+      const y = elevY(h, currentEx) + 8;
+      const wx = lonX(lon), wz = latZ(lat);
+
+      // 只保留鄉鎮文字，不放圓球
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 64;
+      const ctx = c.getContext('2d');
+      ctx.font = 'bold 28px Microsoft JhengHei, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.strokeText(short, 128, 32);
+      ctx.fillStyle = '#d6ecff';
+      ctx.fillText(short, 128, 32);
+      const tex = new THREE.CanvasTexture(c);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, transparent: true, depthTest: false, depthWrite: false
+      }));
+      sp.position.set(wx, y + 18, wz);
+      sp.scale.set(36, 9, 1);
+      sp.renderOrder = 130;
+      sp.userData = { isTownLabel: true, wx, wz, lon, lat, shortName: short, fullName: item.name || short };
+      townLabelGroup.add(sp);
+    });
+
+    townLabelGroup.visible = true;
+    return list.length;
+  } catch (e) {
+    console.warn('鄉鎮地名載入失敗', e);
+    return 0;
+  }
+}
+
+function updateTownLabelLOD() {
+  // 聚焦景點或 3D 導覽時，禁止 LOD 把其他鄉鎮重新顯示出來。
+  // 這裡必須直接 return，否則 animate() 每幀都會覆蓋 setTourTownOnly()。
+  if (focusedSpotOnly) return;
+  if (tourPlaying) return;
+  if (!$('#towns').checked) {
+    townLabelGroup.visible = false;
+    return;
+  }
+  townLabelGroup.visible = true;
+
+  // 以「鏡頭看的中心」為準：放大哪裡，就顯示附近的鄉鎮名
+  const focus = controls.target;
+  const camDist = camera.position.distanceTo(focus);
+
+  // 越近可見半徑越小（只看局部）；越遠可略大但文字仍關閉
+  // camDist ~ 80～150 很近；300～500 中距；>500 全台視角
+  let labelRadius, showLabels, showDots;
+  if (camDist < 180) {
+    showLabels = true;
+    showDots = true;
+    labelRadius = 55 + camDist * 0.15; // 只顯示視線附近
+  } else if (camDist < 380) {
+    showLabels = true;
+    showDots = true;
+    labelRadius = 90 + (camDist - 180) * 0.2;
+  } else {
+    showLabels = false; // 遠距離不顯示鄉鎮文字
+    showDots = camDist < 700; // 中遠距離可留小點
+    labelRadius = 0;
+  }
+
+  const fx = focus.x, fz = focus.z;
+  const r2 = labelRadius * labelRadius;
+
+  townLabelGroup.children.forEach(ch => {
+    const ud = ch.userData || {};
+    if (ud.isTownLabel) {
+      if (!showLabels) {
+        ch.visible = false;
+        return;
+      }
+      const dx = ud.wx - fx, dz = ud.wz - fz;
+      ch.visible = (dx * dx + dz * dz) <= r2;
+    }
+  });
+}
+
+function clearRoute() {
+  while (routeGroup.children.length) routeGroup.remove(routeGroup.children[0]);
+}
+
+function transportStyle(transport) {
+  const t = (transport || '').toLowerCase();
+  if (/飛|航|機/.test(t)) return { color: 0x7ec8ff, arc: 55, width: 2.2, label: '航空路線' };
+  if (/自駕|汽|車|機車/.test(t)) return { color: 0xffb347, arc: 8, width: 2.0, label: '公路路線' };
+  if (/鐵|火|高鐵|台鐵/.test(t)) return { color: 0xff6b6b, arc: 12, width: 2.0, label: '鐵道路線' };
+  if (/單車|腳踏/.test(t)) return { color: 0x7dcea0, arc: 4, width: 1.6, label: '單車路線' };
+  return { color: 0xffe08a, arc: 18, width: 1.8, label: '大眾運輸路線' };
+}
+
+function showRoute(list, transport) {
+  clearRoute();
+  const pts = [];
+  const style = transportStyle(transport || currentTransport);
+  list.forEach((s, i) => {
+    const h = terrainInfo.elev(s.lon, s.lat);
+    const y = elevY(h, currentEx) + 10;
+    // 路線只保留線，不再畫每一站的浮空球與文字；目標站名由 focus label 單獨顯示。
+    pts.push(new THREE.Vector3(lonX(s.lon), y + 2, latZ(s.lat)));
+  });
+  if (pts.length > 1) {
+    // 依交通方式決定弧高：飛機較高、自駕貼地、大眾運輸中等
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
+      mid.y += style.arc;
+      const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
+      const segs = curve.getPoints(24);
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(segs),
+        new THREE.LineBasicMaterial({ color: style.color, transparent: true, opacity: 0.95 })
+      );
+      line.renderOrder = 70;
+      routeGroup.add(line);
+    }
+  }
+  return pts;
+}
+
+
+// ===== 觀光署開放資料 =====
+const TOURISM_ATTRACTION_ZIP = 'https://media.taiwan.net.tw/XMLReleaseAll_public/v2.0/Zh_tw/Attraction-json.zip';
+const TOURISM_DATA_PAGE = 'https://data.gov.tw/dataset/7777';
+let tourismLoaded = false;
+
+function deepFindAttractions(value, out = []) {
+  if (!value || typeof value !== 'object') return out;
+  if (Array.isArray(value)) {
+    for (const v of value) deepFindAttractions(v, out);
+    return out;
+  }
+  if (value.AttractionName || value.attractionName || value.AttractionID) out.push(value);
+  for (const v of Object.values(value)) {
+    if (v && typeof v === 'object') deepFindAttractions(v, out);
+  }
+  return out;
+}
+
+function firstText(...vals) {
+  for (const v of vals) {
+    if (typeof v === 'string' && v.trim()) return v.trim();
+    if (typeof v === 'number') return String(v);
+  }
+  return '';
+}
+
+// 觀光署 V2.1 的 LocatedCities / PostalAddress 是巢狀物件，不能直接用 firstText() 讀。
+// 例如 PostalAddress.City =「南投縣」，LocatedCities.LocatedCity[].City =「南投縣」。
+function findNestedText(value, keys = [], depth = 0) {
+  if (value == null || depth > 6) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findNestedText(item, keys, depth + 1);
+      if (found) return found;
+    }
+    return '';
+  }
+  if (typeof value === 'object') {
+    for (const key of keys) {
+      const direct = value[key];
+      if (typeof direct === 'string' && direct.trim()) return direct.trim();
+      if (typeof direct === 'number') return String(direct);
+    }
+    for (const child of Object.values(value)) {
+      const found = findNestedText(child, keys, depth + 1);
+      if (found) return found;
+    }
+  }
+  return '';
+}
+
+function extractTourismCity(raw) {
+  // 優先使用官方的 LocatedCities，其次才使用 PostalAddress。
+  const city =
+    findNestedText(raw?.LocatedCities, ['City', 'city']) ||
+    findNestedText(raw?.PostalAddress, ['City', 'city']) ||
+    firstText(raw?.City, raw?.city);
+  if (city) return city;
+
+  // 少數資料可能只有完整地址字串，從地址開頭抓縣市。
+  const address = firstText(raw?.Address, raw?.address);
+  const m = address.match(/(臺北市|台北市|新北市|基隆市|桃園市|新竹市|新竹縣|苗栗縣|臺中市|台中市|彰化縣|南投縣|雲林縣|嘉義市|嘉義縣|臺南市|台南市|高雄市|屏東縣|宜蘭縣|花蓮縣|臺東縣|台東縣|澎湖縣)/);
+  return m ? m[1] : '';
+}
+
+function extractTourismTown(raw) {
+  // 優先抓官方 LocatedCities / PostalAddress 內的鄉鎮市區欄位。
+  const town =
+    findNestedText(raw?.LocatedCities, ['Town', 'town', 'Township', 'township', 'District', 'district', 'TownName', 'townName', 'DistrictName', 'districtName']) ||
+    findNestedText(raw?.PostalAddress, ['Town', 'town', 'Township', 'township', 'District', 'district', 'TownName', 'townName', 'DistrictName', 'districtName']) ||
+    firstText(raw?.Town, raw?.town, raw?.Township, raw?.township, raw?.District, raw?.district);
+  if (town) return town;
+
+  // 地址若是純字串，再從縣市後面擷取第一個「區／鄉／鎮／市」。
+  const address = firstText(raw?.Address, raw?.address, raw?.PostalAddress, raw?.postalAddress);
+  const m = String(address).match(/(?:臺北市|台北市|新北市|基隆市|桃園市|新竹市|新竹縣|苗栗縣|臺中市|台中市|彰化縣|南投縣|雲林縣|嘉義市|嘉義縣|臺南市|台南市|高雄市|屏東縣|宜蘭縣|花蓮縣|臺東縣|台東縣|澎湖縣)([^0-9，,\s]{1,8}(?:區|鄉|鎮|市))/);
+  return m ? m[1] : '';
+}
+
+function extractUrl(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const m = value.match(/https?:\/\/[^\s"<'>]+/i);
+    return m ? m[0] : (value.startsWith('http') ? value : '');
+  }
+  if (Array.isArray(value)) {
+    for (const v of value) { const u = extractUrl(v); if (u) return u; }
+    return '';
+  }
+  if (typeof value === 'object') {
+    for (const k of ['PictureUrl1','PictureUrl','URL','url','ImageUrl','imageUrl','Src','src']) {
+      const u = extractUrl(value[k]); if (u) return u;
+    }
+    for (const v of Object.values(value)) { const u = extractUrl(v); if (u) return u; }
+  }
+  return '';
+}
+
+function extractImageUrls(value, out = []) {
+  if (!value || out.length >= 10) return out;
+  if (typeof value === 'string') {
+    const s = value.trim();
+    // 觀光署圖片有些網址沒有副檔名，因此不能只靠 .jpg/.png 判斷。
+    if (/^https?:\/\//i.test(s)) out.push(s);
+    return out;
+  }
+  if (Array.isArray(value)) {
+    for (const v of value) extractImageUrls(v, out);
+    return out;
+  }
+  if (typeof value === 'object') {
+    for (const [k,v] of Object.entries(value)) {
+      if (/url|image|picture|photo|src/i.test(k) || typeof v === 'object') extractImageUrls(v, out);
+    }
+  }
+  return [...new Set(out)];
+}
+
+function normalizeTourismSpot(raw) {
+  const name = firstText(raw.AttractionName, raw.attractionName, raw.Name, raw.name);
+  const lon = Number(firstText(raw.PositionLon, raw.positionLon, raw.Lon, raw.lon, raw.longitude));
+  const lat = Number(firstText(raw.PositionLat, raw.positionLat, raw.Lat, raw.lat, raw.latitude));
+  if (!name || !Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+  if (lon < 119.0 || lon > 122.5 || lat < 21.5 || lat > 25.6) return null;
+
+  const city = extractTourismCity(raw);
+  const town = extractTourismTown(raw);
+  const desc = firstText(raw.Description, raw.description, raw.Introduction, raw.introduction);
+  const classes = firstText(raw.AttractionClasses, raw.attractionClasses, raw.Category, raw.category);
+  const tags = [];
+  const text = `${name} ${desc} ${classes}`;
+  const rules = [
+    ['山林',/山|森林|步道|國家公園|自然保護|生態|瀑布|峽谷|高山|草原/],
+    // 海岸分類採較嚴格的濱海詞彙；不再因「湖泊、溪、潭、島」等字樣誤判。
+    ['海岸',/海岸|濱海|海邊|海灘|沙灘|海灣|港口|漁港|潮間帶|濕地|燈塔|礁岩|海景|海洋|海水浴場|出海|沿海/],
+    ['文化',/古蹟|歷史|文化|博物館|藝術|老街|寺|廟|古堡|原住民|客家/],
+    ['教育',/教育|學習|科學|天文|博物館|展覽|知識/],
+    ['美食',/夜市|老街|美食|小吃|市場|料理/],
+    ['溫泉',/溫泉|泡湯/],
+    ['親子',/親子|動物園|遊樂|教育|農場|園區/],
+    ['夜景',/夜景|夕陽|燈塔/]
+  ];
+  for (const [tag,re] of rules) if (re.test(text)) tags.push(tag);
+  if (!tags.length) tags.push('文化');
+
+  const images = extractImageUrls(raw.Images || raw.images);
+  const image = images[0] || extractUrl(raw.Images || raw.images);
+  const website = firstText(raw.WebsiteURL, raw.websiteURL, raw.Website, raw.website);
+  const address = firstText(raw.PostalAddress, raw.postalAddress, raw.Address, raw.address);
+  const service = firstText(raw.ServiceTimeInfo, raw.serviceTimeInfo, raw.OpeningHours, raw.openingHours);
+  const traffic = firstText(raw.TrafficInfo, raw.trafficInfo);
+  const parking = firstText(raw.ParkingInfo, raw.parkingInfo);
+  const fee = firstText(raw.FeeInfo, raw.feeInfo);
+  const phone = firstText(raw.Telephones, raw.telephones, raw.Phone, raw.phone);
+  const visit = firstText(raw.VisitDuration, raw.visitDuration);
+  const id = firstText(raw.AttractionID, raw.attractionID, raw.ID, raw.id);
+  return {
+    id, name, city, town, cats: tags, tags: tags.slice(0,4), desc: desc || '觀光署景點資料暫無詳細介紹。',
+    lon, lat, image, images, website, address, service, traffic, parking, fee, phone, visit,
+    source: '交通部觀光署觀光資訊資料庫', sourceUrl: TOURISM_DATA_PAGE
+  };
+}
+
+async function loadTourismAttractions() {
+  const ds = $('#dataSource');
+  try {
+    if (ds) ds.textContent = '景點資料：正在下載交通部觀光署 JSON…';
+    const r = await fetch(TOURISM_ATTRACTION_ZIP, { cache:'no-cache' });
+    if (!r.ok) throw new Error('觀光署資料 HTTP ' + r.status);
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    const files = unzipSync(bytes);
+
+    // 觀光署 ZIP 可能包含多個 JSON（例如依地區／資料結構拆檔）。
+    // 不能只讀第一個 JSON，否則網站只會拿到部分景點。
+    const jsonNames = Object.keys(files).filter(k => /\.json$/i.test(k));
+    if (!jsonNames.length) throw new Error('ZIP 內找不到 JSON');
+
+    const seen = new Set();
+    const spots = [];
+    let parsedJsonCount = 0;
+    let parsedRecordCount = 0;
+
+    for (const jsonName of jsonNames) {
+      try {
+        const rawText = strFromU8(files[jsonName]);
+        const root = JSON.parse(rawText);
+        const raws = deepFindAttractions(root);
+        parsedJsonCount++;
+        parsedRecordCount += raws.length;
+
+        for (const raw of raws) {
+          const s = normalizeTourismSpot(raw);
+          if (!s) continue;
+          const key = s.id || `${s.name}|${s.lon}|${s.lat}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          spots.push(s);
+        }
+      } catch (jsonErr) {
+        // 單一 JSON 損壞時不影響其他 JSON；最後仍以成功解析的完整資料判斷。
+        console.warn('觀光署 JSON 解析略過：', jsonName, jsonErr);
+      }
+    }
+
+    // 只要 ZIP 有成功解析出合理數量的官方景點，就直接使用官方完整資料。
+    // 不再因某個 JSON 檔案格式不同而退回 25 筆內建資料。
+    if (spots.length < 100) {
+      throw new Error(`觀光署資料解析異常：JSON ${parsedJsonCount}/${jsonNames.length}，原始紀錄 ${parsedRecordCount}，有效景點 ${spots.length}`);
+    }
+
+    TRAVEL_SPOTS = spots;
+    spotByName.clear();
+    for (const s of TRAVEL_SPOTS) {
+      spotByName.set(s.name, s);
+      POI_COORDS[s.name] = [s.lon, s.lat];
+    }
+    tourismLoaded = true;
+    addPOIMarkers();
+    renderSearchResults($('#spotSearch').value || '');
+    if (ds) ds.textContent = `景點資料：交通部觀光署｜已載入 ${spots.length.toLocaleString()} 筆｜來源：觀光署｜每日更新`;
+    return spots.length;
+  } catch (e) {
+    console.warn('Tourism data fallback:', e);
+    tourismLoaded = false;
+    if (ds) ds.textContent = '景點資料：觀光署資料載入失敗，使用內建備援資料（可重新整理重試）';
+    return TRAVEL_SPOTS.length;
+  }
+}
+
+function spotInfo(name){
+  const exact=spotByName.get(name);
+  if(exact) return exact;
+  for(const s of TRAVEL_SPOTS) if(name.includes(s.name)||s.name.includes(name)) return s;
+  return null;
+}
+function addToItinerary(spot){
+  if(!spot) return;
+  if(itinerary.some(s=>s.name===spot.name)) return renderItinerary();
+  itinerary.push(spot); renderItinerary();
+}
+function removeFromItinerary(name){ itinerary=itinerary.filter(s=>s.name!==name); renderItinerary(); }
+function renderItinerary(){
+  const box=$('#itinerary'), list=$('#itList');
+  box.style.display=itinerary.length?'block':'none';
+  $('#itCount').textContent=itinerary.length?`· ${itinerary.length} 站`:'';
+  if(!itinerary.length){list.innerHTML='<div class="it-empty">尚未加入景點</div>';return;}
+  list.innerHTML=itinerary.map((s,i)=>`<div class="it-row"><div class="num">${i+1}</div><div class="name">${s.name}<small style="display:block;color:#8fa7b8">${s.city} · ${s.tags.join('、')}</small></div><button data-rm="${encodeURIComponent(s.name)}">移除</button></div>`).join('');
+  list.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>removeFromItinerary(decodeURIComponent(b.dataset.rm)));
+}
+function mergeSpotForPanel(name){
+  const base=spotInfo(name);
+  if(!base) return {name,city:'',tags:[],desc:'暫無景點資料'};
+  return {name:base.name,city:base.city,town:base.town,tags:base.tags,desc:base.desc,aiText:base.desc,lon:base.lon ?? POI_COORDS[base.name]?.[0],lat:base.lat ?? POI_COORDS[base.name]?.[1],image:base.image,website:base.website,address:base.address,service:base.service,traffic:base.traffic,parking:base.parking,fee:base.fee,phone:base.phone,visit:base.visit,source:base.source,sourceUrl:base.sourceUrl};
+}
+
+function canonicalPlaceName(v=''){
+  return String(v||'')
+    .trim()
+    .replace(/^臺/g,'台')
+    .replace(/台灣|臺灣/g,'')
+    .replace(/\s+/g,'')
+    .replace(/[區鄉鎮市]$/,'$&');
+}
+
+function extractSpotTown(spot){
+  if(!spot) return '';
+  return String(spot.town || spot.district || '').trim();
+}
+
+function setTourTownOnly(spot){
+  // 不論「單點放大」或「3D 導覽」，都只顯示目前景點所屬的鄉鎮。
+  // 優先比對官方資料的鄉鎮名稱；沒有鄉鎮資料時才退回座標最近的鄉鎮。
+  if(!spot){
+    townLabelGroup.visible = false;
+    return;
+  }
+  const town = canonicalPlaceName(extractSpotTown(spot));
+  const lon=Number(spot.lon), lat=Number(spot.lat);
+  if(!Number.isFinite(lon)||!Number.isFinite(lat)){
+    townLabelGroup.visible = false;
+    return;
+  }
+  const x=lonX(lon), z=latZ(lat);
+  let best=null, bestD=Infinity;
+
+  // 1) 先用官方鄉鎮名稱精準配對。
+  if(town){
+    townLabelGroup.children.forEach(ch=>{
+      const ud=ch.userData||{};
+      if(!ud.isTownLabel) return;
+      const candidates=[ud.shortName, ud.fullName].map(canonicalPlaceName);
+      if(candidates.includes(town)){ best=ch; }
+    });
+  }
+
+  // 2) 沒有精準名稱時，用景點座標找最近的鄉鎮標籤。
+  if(!best){
+    townLabelGroup.children.forEach(ch=>{
+      const ud=ch.userData||{};
+      if(!ud.isTownLabel) return;
+      const d=(ud.wx-x)**2+(ud.wz-z)**2;
+      if(d<bestD){ bestD=d; best=ch; }
+    });
+  }
+
+  townLabelGroup.children.forEach(ch=>{
+    const ud=ch.userData||{};
+    if(ud.isTownLabel) ch.visible = (ch===best);
+  });
+  townLabelGroup.visible=!!best;
+}
+
+function setFocusedSpotView(spot, showTown=true){
+  // 聚焦景點時只留下「目標景點 + 目標鄉鎮」；其他縣市、鄉鎮、POI 全部隱藏。
+  // 導覽與單點放大共用同一套顯示規則。
+  focusedSpotOnly = !!spot;
+  cityLabelGroup.visible=false;
+  townLabelGroup.visible=false;
+  setTourTownOnly(spot);
+  poiGroup.visible=false;
+  routeGroup.visible=false;
+  clearTourTargetLabel();
+  if(!spot) return;
+
+  const lon=Number(spot.lon), lat=Number(spot.lat);
+  if(!Number.isFinite(lon)||!Number.isFinite(lat)) return;
+
+  const groundH = terrainInfo?.elev(lon,lat) || 0;
+  const groundY = elevY(groundH,currentEx) + 3;
+  const labelY = groundY + 30;
+  const x = lonX(lon), z = latZ(lat);
+
+  // 目標引導線：從景點地表垂直連到名稱，線不會被地形遮住。
+  const lineGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(x, groundY, z),
+    new THREE.Vector3(x, labelY - 5, z)
+  ]);
+  const lineMat = new THREE.LineBasicMaterial({
+    color: 0xffd27a,
+    transparent: true,
+    opacity: 0.95,
+    depthTest: false,
+    depthWrite: false
+  });
+  const line = new THREE.Line(lineGeo, lineMat);
+  line.renderOrder = 300;
+  tourTargetGroup.add(line);
+
+  // 地表只放小型圓環，不使用浮空球，避免再次出現滿版圓點。
+  const ringGeo = new THREE.RingGeometry(3.2, 4.5, 32);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xffd27a,
+    transparent: true,
+    opacity: 0.9,
+    side: THREE.DoubleSide,
+    depthTest: false,
+    depthWrite: false
+  });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, groundY + 0.8, z);
+  ring.renderOrder = 301;
+  tourTargetGroup.add(ring);
+
+  // 景點名稱置中於目標正上方，確保鏡頭對準景點時能直接讀到。
+  const spotLabel=makeLabel(spot.name,lon,lat,'#fff8e0',1.12,true);
+  spotLabel.position.y = labelY;
+  spotLabel.scale.set(78,20,1);
+  spotLabel.renderOrder = 302;
+  tourTargetGroup.add(spotLabel);
+
+  // 正式聚焦畫面不顯示鄉鎮名稱；showTown 保留參數只是為了相容既有呼叫。
+  tourTargetGroup.visible=true;
+}
+
+function showTravelSpot(name){
+  const info=spotInfo(name); if(!info) return;
+  const c=POI_COORDS[info.name] || [Number(info.lon),Number(info.lat)];
+  if(!c || !Number.isFinite(c[0]) || !Number.isFinite(c[1])) return;
+  const h=terrainInfo?.elev(c[0],c[1])||0;
+  const target=new THREE.Vector3(lonX(c[0]),elevY(h,currentEx)+5,latZ(c[1]));
+  camLookAt(target,55,0.42);
+  const s=mergeSpotForPanel(info.name); s.lon=c[0]; s.lat=c[1];
+  setFocusedSpotView(s,true);
+  showSpotPanel(s,0,1);
+}
+function filteredSpots(){ return TRAVEL_SPOTS.filter(s=>activeCategory==='全部'||s.cats.includes(activeCategory)); }
+function renderSearchResults(q=''){
+  const box=$('#searchResults'); const key=q.trim().toLowerCase();
+  const arr=filteredSpots().filter(s=>!key || (s.name+s.city+s.cats.join('')+s.tags.join('')).toLowerCase().includes(key)).slice(0,8);
+  if(!key && activeCategory==='全部'){box.style.display='none';const catBar=$('#categoryBar');if(catBar)catBar.style.visibility='visible';return;}
+  box.innerHTML=arr.length?arr.map(s=>`<div class="search-item" data-spot="${encodeURIComponent(s.name)}"><b>📍 ${s.name}</b><span>${s.city} · ${s.tags.join('、')}</span></div>`).join(''):'<div class="search-item">找不到符合條件的景點</div>';
+  box.style.display='block';
+  const catBar=$('#categoryBar'); if(catBar) catBar.style.visibility='hidden';
+  box.querySelectorAll('[data-spot]').forEach(el=>el.onclick=()=>{showTravelSpot(decodeURIComponent(el.dataset.spot));box.style.display='none';$('#categoryBar').style.visibility='visible';});
+}
+function addPOIMarkers(){
+  // 不再把 5,000+ 官方景點全部畫成浮空圓球。
+  // 景點只有在「搜尋／分類選取／行程導覽」時才顯示目標標記，避免整張台灣被橘球蓋住。
+  while (poiGroup.children.length) poiGroup.remove(poiGroup.children[0]);
+  poiGroup.visible = false;
+}
+
+function applyCategory(cat){
+  activeCategory=cat;
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.toggle('active',b.dataset.cat===cat));
+  // 分類不是把全部 POI 畫到地圖上，而是列出符合分類的前 8 筆，讓使用者點選目標。
+  renderSearchResults('');
+}
+
+function selectedCities() {
+  return Array.from(document.querySelectorAll('input[name="city"]:checked')).map(el => el.value);
+}
+
+function inTaiwan(lon, lat) {
+  return lon >= 119.3 && lon <= 122.1 && lat >= 21.8 && lat <= 25.4;
+}
+
+function canonCity(city='') {
+  let x = String(city || '').trim();
+  // 先抓「縣市」層級，避免「臺北市中正區」被處理成無法比對的字串。
+  const m = x.match(/^(.+?)(?:縣|市)/);
+  if (m) x = m[1];
+  x = x.replace(/區.*$/,'').replace(/鄉.*$/,'').replace(/鎮.*$/,'').trim();
+  const map = {
+    '臺北':'台北','台北':'台北','新北':'新北','基隆':'基隆','桃園':'桃園',
+    '新竹':'新竹','苗栗':'苗栗','臺中':'台中','台中':'台中','彰化':'彰化','南投':'南投',
+    '雲林':'雲林','嘉義':'嘉義','臺南':'台南','台南':'台南','高雄':'高雄','屏東':'屏東',
+    '宜蘭':'宜蘭','花蓮':'花蓮','臺東':'台東','台東':'台東','澎湖':'澎湖'
+  };
+  return map[x] || x;
+}
+function themeProfile(keywords=[]) {
+  const text = keywords.join(' ').toLowerCase();
+  const profiles = [
+    {key:'教育', words:['教育','學習','科學','知識','博物館','展覽','親子學習','人文'], tags:['教育','文化','親子'], re:/教育|學習|科學|博物館|展覽|知識|文化|歷史|生態|天文|自然/},
+    {key:'文化', words:['文化','歷史','古蹟','人文','藝術'], tags:['文化'], re:/文化|歷史|古蹟|藝術|博物館|老街|寺|廟|古堡|原住民|客家/},
+    {key:'自然', words:['自然','山林','生態','森林','步道'], tags:['山林','海岸'], re:/自然|生態|森林|山林|步道|國家公園|瀑布|峽谷|高山|草原|濕地|海岸/},
+    {key:'親子', words:['親子','小孩','兒童','家庭'], tags:['親子'], re:/親子|兒童|小孩|家庭|動物園|遊樂|農場|教育/},
+    {key:'美食', words:['美食','吃','小吃','夜市'], tags:['美食'], re:/美食|小吃|夜市|市場|料理/},
+    {key:'海岸', words:['海','海岸','海灘','濕地'], tags:['海岸'], re:/海|海岸|海灘|濕地|港|島|湖泊|溪|潭/},
+    {key:'溫泉', words:['溫泉','泡湯'], tags:['溫泉'], re:/溫泉|泡湯/},
+    // 特定活動／主題：讓「鹿野熱氣球」這類複合關鍵字能命中官方景點介紹。
+    {key:'熱氣球', words:['熱氣球','氣球嘉年華','熱氣球嘉年華','鹿野高台','鹿野'], tags:['自然'], re:/熱氣球|氣球嘉年華|鹿野高台|鹿野/},
+    {key:'廟宇', words:['廟宇','寺廟','古廟','廟','寺','宮','祠','殿','堂','庵','壇'], tags:['文化'], re:/廟宇|寺廟|古廟|廟|寺|宮|祠|殿|堂|庵|壇/}
+  ];
+  return profiles.filter(p => text.includes(p.key) || p.words.some(w=>text.includes(w)));
+}
+
+function spotRelevance(spot, profiles, extraText='') {
+  const hay = `${spot.name} ${spot.city} ${(spot.cats||[]).join(' ')} ${(spot.tags||[]).join(' ')} ${spot.desc||''} ${extraText}`;
+  let score = 0;
+
+  // 使用者輸入的主題可能是複合詞，例如「鹿野熱氣球」，
+  // 官方景點名稱／介紹通常會拆成「鹿野高台」與「熱氣球」。
+  // 因此除了整句比對，也拆出常見旅遊關鍵詞做加權。
+  const rawTerms = String(extraText || '').split(/[\s,，、；;｜|]+/).filter(Boolean);
+  const keywordAliases = {
+    '鹿野熱氣球':['鹿野','熱氣球','鹿野高台','熱氣球嘉年華'],
+    '台東熱氣球':['台東','臺東','熱氣球','鹿野高台','熱氣球嘉年華'],
+    '熱氣球':['熱氣球','鹿野高台','熱氣球嘉年華']
+  };
+  for (const term of rawTerms) {
+    const aliases = keywordAliases[term] || [term];
+    for (const alias of aliases) {
+      if (alias && hay.includes(alias)) score += alias.length >= 3 ? 18 : 10;
+    }
+  }
+  for (const p of profiles) {
+    if ((spot.cats||[]).some(t=>p.tags.includes(t))) score += 12;
+    if (p.re.test(hay)) score += 10;
+    for (const w of p.words) if (hay.includes(w)) score += 3;
+  }
+  // 明確輸入「廟宇／寺廟」時，提高真正宗教建築的權重，
+  // 避免只因「文化」分類就把一般博物館、老街排在廟宇前面。
+  if (profiles.some(p=>p.key==='廟宇')) {
+    const templeHit = /廟宇|寺廟|古廟|廟|寺|宮|祠|殿|堂|庵|壇/.test(hay);
+    if (templeHit) score += 45;
+    else score -= 8;
+  }
+  // 親子條件：不要把「教育」直接等同於親子，但給真正親子景點額外加分。
+  if (profiles.some(p=>p.key==='親子') && (spot.cats||[]).includes('親子')) score += 8;
+  return score;
+}
+
+function parseVisitMinutes(v) {
+  const t=String(v||'');
+  const m=t.match(/(\d+(?:\.\d+)?)\s*(?:小時|hr|hours?)/i);
+  if(m) return Math.max(30, Math.min(240, Math.round(Number(m[1])*60)));
+  const n=t.match(/(\d+)\s*(?:分鐘|分)/);
+  if(n) return Math.max(30, Math.min(240, Number(n[1])));
+  return 90;
+}
+
+function distanceKm(a,b){
+  const R=6371, dLat=(b.lat-a.lat)*Math.PI/180, dLon=(b.lon-a.lon)*Math.PI/180;
+  const la1=a.lat*Math.PI/180, la2=b.lat*Math.PI/180;
+  const h=Math.sin(dLat/2)**2+Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+
+function routeByNearest(spots) {
+  if(!spots.length) return [];
+  const remain=[...spots], out=[remain.shift()];
+  while(remain.length){
+    const last=out[out.length-1];
+    let bi=0, bd=Infinity;
+    remain.forEach((s,i)=>{const d=distanceKm(last,s);if(d<bd){bd=d;bi=i;}});
+    out.push(remain.splice(bi,1)[0]);
+  }
+  return out;
+}
+
+function buildDeterministicItinerary(ctx) {
+  const profiles = themeProfile([ctx.theme || '', ...(ctx.kws || [])].filter(Boolean));
+  const selectedRaw = ctx.cities || [];
+  const selectedCitiesCanon = selectedRaw.map(canonCity).filter(Boolean);
+  const citySet = new Set(selectedCitiesCanon);
+  const theme = String(ctx.theme || '').trim();
+  const extra = [theme, ...(ctx.kws || []), (ctx.extra || '').trim()].filter(Boolean).join(' ');
+
+  // 第一層限制縣市；主題採「強加權排序」而非硬性淘汰。
+  // 特定主題（例如鹿野熱氣球）會優先命中官方景點名稱與介紹，
+  // 找不到完全符合時才退而求其次補同縣市景點。
+  const pool = TRAVEL_SPOTS.filter(s => {
+    if (citySet.size && !citySet.has(canonCity(s.city))) return false;
+    return inTaiwan(Number(s.lon), Number(s.lat));
+  });
+
+  if (!pool.length) {
+    return { profiles, days: [], spots: [], reason: 'city' };
+  }
+
+  // 「廟宇／寺廟」是高度明確的主題：若官方資料中有足夠命中，
+  // 就只從廟宇相關景點挑選，不讓一般文化景點混進來。
+  let candidatePool = pool;
+  const hasTempleTheme = profiles.some(p => p.key === '廟宇') ||
+    /廟宇|寺廟|古廟/.test(extra);
+  if (hasTempleTheme) {
+    const templePool = pool.filter(s => {
+      const hay = `${s.name} ${s.city} ${(s.cats||[]).join(' ')} ${(s.tags||[]).join(' ')} ${s.desc||''}`;
+      return /廟宇|寺廟|古廟|廟|寺|宮|祠|殿|堂|庵|壇/.test(hay);
+    });
+    const needed = Math.max(1, ctx.days * (ctx.days <= 1 ? 3 : 2));
+    // 至少有兩個候選就進入「廟宇專用池」；不足時才允許一般文化景點補位。
+    if (templePool.length >= Math.min(needed, 2)) candidatePool = templePool;
+  }
+
+  // 依主題相關度排序；真正的主題景點優先，但不足時自動補入同縣市景點。
+  const rankedPool = [...candidatePool].sort((a,b) =>
+    spotRelevance(b, profiles, extra) - spotRelevance(a, profiles, extra)
+  );
+
+  // 使用者有選縣市時，保留勾選順序；沒有選時才依資料相關度決定城市。
+  let cities = selectedCitiesCanon.length
+    ? [...new Set(selectedCitiesCanon)].filter(c => rankedPool.some(s => canonCity(s.city) === c))
+    : [...new Set(rankedPool.map(s => canonCity(s.city)))];
+
+  if (!cities.length) return { profiles, days: [], spots: [], reason: 'city' };
+
+  const groups = new Map();
+  for (const s of rankedPool) {
+    const c = canonCity(s.city);
+    if (!groups.has(c)) groups.set(c, []);
+    groups.get(c).push(s);
+  }
+
+  const days = [];
+  const targetPerDay = ctx.days <= 1 ? 3 : 2;
+  const used = new Set();
+
+  // 一天盡量對應一個縣市；縣市多於天數時，依使用者選擇順序安排。
+  for (let d = 0; d < ctx.days; d++) {
+    const city = cities[d % cities.length];
+    const arr = (groups.get(city) || []).filter(s => !used.has(s.name));
+    if (!arr.length) continue;
+
+    const chosen = [];
+    // 第一站：主題相關度最高。
+    chosen.push(arr[0]);
+    used.add(arr[0].name);
+
+    // 後續：在同縣市中找「離上一站近」且仍有主題分數的景點。
+    while (chosen.length < targetPerDay) {
+      const remain = arr.filter(s => !used.has(s.name));
+      if (!remain.length) break;
+      const last = chosen[chosen.length - 1];
+      remain.sort((a,b) => {
+        const sa = spotRelevance(a, profiles, extra) - distanceKm(last,a) * 0.12;
+        const sb = spotRelevance(b, profiles, extra) - distanceKm(last,b) * 0.12;
+        return sb - sa;
+      });
+      chosen.push(remain[0]);
+      used.add(remain[0].name);
+    }
+
+    if (chosen.length) days.push({ day: d + 1, city, spots: routeByNearest(chosen) });
+  }
+
+  // 若某縣市景點不足，從其他「已選縣市」補足，但仍不在同一天混入不同縣市。
+  if (days.length < ctx.days) {
+    for (const city of cities) {
+      if (days.length >= ctx.days) break;
+      const remain = (groups.get(city) || []).filter(s => !used.has(s.name));
+      if (!remain.length) continue;
+      const chosen = remain.slice(0, targetPerDay);
+      chosen.forEach(s => used.add(s.name));
+      days.push({ day: days.length + 1, city, spots: routeByNearest(chosen) });
+    }
+  }
+
+  const all = days.flatMap(d => d.spots);
+  return { profiles, days, spots: all, reason: all.length ? '' : 'insufficient' };
+}
+async function ollamaPlan(ctx) {
+  const base=(($('#ollamaUrl').value||'http://localhost:11434').replace(/\/$/,''));
+  const model=(($('#ollamaModel').value||'qwen3:8b').trim());
+  const plan=buildDeterministicItinerary(ctx);
+  if(!plan.spots.length) throw new Error(plan.reason==='city' ? `目前勾選的縣市沒有可用景點。觀光署已載入 ${TRAVEL_SPOTS.length.toLocaleString()} 筆，請確認縣市資料或重新整理。` : '目前資料筆數不足，請增加天數可用的縣市或重新整理載入觀光署資料。');
+
+  // Qwen 不再負責「挑景點」：網站先依官方資料、主題與地理位置完成行程，再請模型只做短摘要。
+  let aiSummary='依旅遊主題與其他關鍵字安排重點景點，並以同縣市就近移動為主。';
+  try {
+    const allowed=plan.spots.map((s,i)=>`${i+1}. ${s.name}｜${canonCity(s.city)}｜${(s.cats||[]).join('、')}｜${String(s.desc||'').slice(0,120)}`).join('\n');
+    const system='你是台灣旅遊網站的行程摘要助手，只用繁體中文。景點已由網站決定，你不能新增、刪除、替換、重新排序景點，也不能發明地址、座標、票價、營業時間。只能根據提供的景點資料寫一段55字內、簡潔實用的行程摘要。只輸出JSON：{"summary":"..."}。';
+    const user=`需求：${ctx.days}天、${ctx.people}人（${ctx.members}）、${ctx.transport}、縣市：${(ctx.cities||[]).join('、')||'未指定'}、旅遊主題：${ctx.theme||'未指定'}、其他關鍵字：${(ctx.kws||[]).join('、')||'無'}、補充：${ctx.extra||'無'}\n已確定景點：\n${allowed}`;
+    const r=await fetch(base+'/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,temperature:0.15,messages:[{role:'system',content:system},{role:'user',content:user}]})});
+    if(r.ok){
+      const data=await r.json(); let raw=data.choices?.[0]?.message?.content||''; raw=raw.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```$/i,'').trim();
+      const m=raw.match(/\{[\s\S]*\}/); if(m){const j=JSON.parse(m[0]); if(typeof j.summary==='string'&&j.summary.trim()) aiSummary=j.summary.trim().slice(0,80);}
+    }
+  } catch(e) { console.warn('Ollama 摘要失敗，改用網站摘要：',e); }
+
+  const spots=plan.spots.map(s=>({name:s.name,city:s.city,town:s.town,lon:Number(s.lon),lat:Number(s.lat),tags:s.tags||s.cats||[],desc:s.desc,aiText:s.desc,image:s.image,images:s.images||[],website:s.website,address:s.address,service:s.service,fee:s.fee,phone:s.phone,visit:s.visit,source:s.source,sourceUrl:s.sourceUrl,coordFixed:true}));
+  let text=`【AI 行程】${ctx.days}天 · ${ctx.people}人 · ${ctx.transport}\n`;
+  if(ctx.cities.length) text+=`縣市：${ctx.cities.join('、')}\n`;
+  if(ctx.theme) text+=`主題：${ctx.theme}\n`;
+  if(ctx.kws.length) text+=`關鍵字：${ctx.kws.join('、')}\n`;
+  text+=`\n${aiSummary}\n`;
+  text+='\n【行程】\n';
+  plan.days.forEach(d=>{text+=`Day ${d.day}｜${d.city}：${d.spots.map(s=>s.name).join(' → ')}\n`;});
+  text+='\n【景點簡介】\n';
+  plan.spots.forEach((s,i)=>{
+    const intro=String(s.desc||'暫無介紹').replace(/\s+/g,' ').trim();
+    text+=`${i+1}. ${s.name}｜${intro.slice(0,72)}${intro.length>72?'…':''}\n`;
+  });
+
+  const caution=[];
+  if(/大眾|公車|火車|台鐵|高鐵/.test(ctx.transport||'')) caution.push('大眾運輸請先確認班次與末班車');
+  if(/自駕|汽車|機車|開車/.test(ctx.transport||'')) caution.push('自駕請確認停車與山路路況');
+  if(plan.spots.some(s=>/山|森林|步道|高台|高山/.test(`${s.name}${s.tags.join('')}${s.desc}`))) caution.push('山區天氣變化快，步道請依現場狀況調整');
+  if(plan.spots.some(s=>/海|灘|港|濕地|海岸/.test(`${s.name}${s.tags.join('')}${s.desc}`))) caution.push('海岸風浪與潮汐請留意現場公告');
+  if(/熱氣球|氣球/.test(`${ctx.theme} ${(ctx.kws||[]).join(' ')}`)) caution.push('熱氣球活動受天候影響，出發前確認活動日期與飛行狀況');
+  caution.push('景點開放時間、票價及活動資訊請出發前確認');
+  text+='\n【注意事項】\n';
+  [...new Set(caution)].slice(0,4).forEach((x,i)=>{ text+=`${i+1}. ${x}\n`; });
+  text+='\n景點由網站資料庫依主題與關鍵字挑選；Qwen 僅負責短摘要。';
+  return {text,spots};
+}
+
+function renderPlanVisuals(spots){
+  const box=$('#planVisuals');
+  if(!box) return;
+  if(!spots?.length){ box.innerHTML=''; return; }
+  box.innerHTML=spots.map((s,i)=>{
+    const src=s.image || '';
+    const intro=String(s.desc||'暫無介紹').replace(/\s+/g,' ').trim();
+    return `<div class="plan-card" data-plan-spot="${encodeURIComponent(s.name)}">`+
+      `<img src="${src}" alt="${s.name}" onerror="this.style.display='none'">`+
+      `<div><h4>${i+1}. ${s.name}</h4><div class="pc-meta">${s.city||''} · ${(s.tags||[]).slice(0,3).join('、')}</div><p>${intro}</p></div></div>`;
+  }).join('');
+  box.querySelectorAll('[data-plan-spot]').forEach(el=>el.onclick=()=>showTravelSpot(decodeURIComponent(el.dataset.planSpot)));
+}
+
+async function plan() {
+  const cities = selectedCities();
+  const theme = ($('#travelTheme').value || '').trim();
+  const kws = ($('#keywords').value || '').trim().split(/[,，、\s]+/).filter(Boolean);
+  const days = Math.max(1, parseInt($('#days').value) || 2);
+  const transport = $('#transport').value || '大眾運輸';
+  const people = $('#people').value;
+  const members = $('#members').value;
+  const extra = ($('#extra').value || '').trim();
+  const ctx = { days, transport, people, members, extra, theme, kws, cities };
+
+  localStorage.setItem('tw_ollama_url', $('#ollamaUrl').value || '');
+  localStorage.setItem('tw_ollama_model', $('#ollamaModel').value || '');
+
+  $('#btnPlan').disabled = true;
+  $('#result').textContent = 'Ollama 規劃中（本機模型可能需數十秒）…';
+  renderPlanVisuals([]);
+  msg('正在呼叫 Ollama…');
+
+  try {
+    const { text, spots } = await ollamaPlan(ctx);
+    tourList = spots;
+    itinerary = spots.map(s=>spotInfo(s.name)||s);
+    renderItinerary();
+    currentTransport = transport;
+    pathPts = showRoute(spots, transport);
+    $('#btnTour').disabled = spots.length < 1;
+    $('#result').textContent = text;
+    renderPlanVisuals(spots);
+    msg('Ollama 行程已產生，地圖已標點');
+  } catch (e) {
+    console.error(e);
+    $('#result').textContent =
+      'Ollama 失敗：' + (e.message || e) +
+      '\n\n請確認：\n1. 本機已執行 ollama serve\n2. 已 ollama pull 模型（預設 qwen3:8b）\n' +
+      '3. 允許跨域：PowerShell 可設 $env:OLLAMA_ORIGINS=\"*\" 後重開 ollama\n' +
+      '4. 本頁必須用 http://localhost 開啟';
+    msg('Ollama 連線或回傳失敗');
+    tourList = [];
+    $('#btnTour').disabled = true;
+  } finally {
+    $('#btnPlan').disabled = false;
+  }
+}
+
+function camLookAt(target, dist = 80, elev = 0.45) {
+  const ang = Math.atan2(target.x, target.z || 0.001);
+  camera.position.set(
+    target.x + Math.sin(ang + 0.5) * dist,
+    target.y + dist * elev + 30,
+    target.z + Math.cos(ang + 0.5) * dist
+  );
+  controls.target.copy(target);
+  controls.update();
+}
+
+async function loadSpotImage(spot) {
+  const img = $('#spotImg');
+  if (!img || !spot) return;
+  img.style.display = 'none';
+  img.removeAttribute('src');
+
+  // 依序嘗試：觀光署全部圖片 → Wikipedia → Wikimedia Commons。
+  const official = [ ...(Array.isArray(spot.images) ? spot.images : []), spot.image || '' ].filter(Boolean);
+  const candidates = [...new Set(official)];
+
+  const tryImage = (urls, i = 0) => new Promise(resolve => {
+    if (i >= urls.length) return resolve(false);
+    const test = new Image();
+    test.onload = () => {
+      img.src = urls[i];
+      img.style.display = 'block';
+      resolve(true);
+    };
+    test.onerror = () => tryImage(urls, i + 1).then(resolve);
+    test.src = urls[i];
+  });
+
+  if (await tryImage(candidates)) return;
+
+  // Wikipedia 摘要縮圖
+  try {
+    const r = await fetch('https://zh.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(spot.name), { cache:'force-cache' });
+    if (r.ok) {
+      const j = await r.json();
+      const url = j.thumbnail?.source || j.originalimage?.source;
+      if (url && await tryImage([url])) return;
+    }
+  } catch (_) {}
+
+  // Wikimedia Commons：沒有 Wikipedia 條目時再搜尋圖片。
+  try {
+    const api = 'https://commons.wikimedia.org/w/api.php?action=query&generator=search' +
+      '&gsrnamespace=6&gsrsearch=' + encodeURIComponent((spot.name || '') + ' Taiwan') +
+      '&gsrlimit=5&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json&origin=*';
+    const r = await fetch(api, { cache:'force-cache' });
+    if (r.ok) {
+      const j = await r.json();
+      const urls = Object.values(j.query?.pages || {})
+        .map(p => p.imageinfo?.[0]?.thumburl || p.imageinfo?.[0]?.url)
+        .filter(Boolean);
+      if (await tryImage(urls)) return;
+    }
+  } catch (_) {}
+
+  // 最後顯示替代圖，避免景點卡片直接沒有圖片。
+  const safeName = String(spot.name || '景點').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480"><rect width="100%" height="100%" fill="#17313b"/><text x="50%" y="46%" dominant-baseline="middle" text-anchor="middle" fill="#dce9ed" font-size="34" font-family="sans-serif">${safeName}</text><text x="50%" y="58%" dominant-baseline="middle" text-anchor="middle" fill="#8fa7b8" font-size="20" font-family="sans-serif">暫無可用景點照片</text></svg>`;
+  img.src = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+  img.style.display = 'block';
+}
+
+function showSpotPanel(spot, index, total) {
+  if (!spot) {
+    $('#spotPanel').style.display = 'none';
+    return;
+  }
+
+  // 導覽中同一站不要每一幀重建 DOM / 重新載入圖片，
+  // 否則圖片會一直閃爍、文字也會跳動。
+  const panel = $('#spotPanel');
+  const sameSpot = panel.dataset.tourSpot === String(spot.name);
+  const sameMode = panel.dataset.tourMode === (tourPlaying ? 'tour' : 'normal');
+
+  if (!sameSpot || !sameMode) {
+    $('#spotBadge').textContent = `導覽 ${index + 1} / ${total}`;
+    $('#spotTitle').textContent = spot.name;
+    const style = transportStyle(currentTransport);
+    $('#spotMeta').textContent =
+      (spot.city || '') +
+      (spot.tags ? ' · ' + spot.tags.join('、') : '') +
+      ' · ' + style.label;
+
+    let body = spot.aiText || spot.desc || '暫無介紹';
+    const official = [
+      spot.address ? `地址：${spot.address}` : '',
+      spot.service ? `開放時間：${spot.service}` : '',
+      spot.fee ? `費用：${spot.fee}` : '',
+      spot.phone ? `電話：${spot.phone}` : '',
+      spot.visit ? `建議停留：${spot.visit}` : ''
+    ].filter(Boolean);
+    if (official.length) body += '\n\n' + official.join('\n');
+    $('#spotBody').textContent = body;
+
+    const note = $('#spotAiNote');
+    if (note) {
+      note.textContent = spot.source
+        ? `${spot.source}｜資料每日更新`
+        : (spot.aiText ? '本段為 AI／智慧規劃解說' : '尚未產生 AI 解說，可先按「Ollama 產生行程」');
+    }
+
+    const tagsEl = $('#spotTags');
+    tagsEl.innerHTML = '';
+    (spot.tags || []).forEach(t => {
+      const span = document.createElement('span');
+      span.className = 'tag';
+      span.textContent = t;
+      tagsEl.appendChild(span);
+    });
+
+    let actions=document.querySelector('#spotActions');
+    if(!actions){
+      actions=document.createElement('div');
+      actions.id='spotActions';
+      actions.className='spot-actions';
+      panel.appendChild(actions);
+    }
+
+    const info=spotInfo(spot.name);
+    if (tourPlaying) {
+      actions.innerHTML=`<div class="tour-nav"><div class="tour-nav-title">導覽控制 · 第 ${index + 1} / ${total} 站</div><button id="prevTourBtn">‹ 上一站</button><button id="nextTourBtn">下一站 ›</button></div>`;
+      const prev=$('#prevTourBtn'), next=$('#nextTourBtn');
+      if(prev) { prev.disabled = index <= 0; prev.onclick=()=>jumpTourStation(-1); }
+      if(next) { next.disabled = index >= total - 1; next.onclick=()=>jumpTourStation(1); }
+    } else {
+      actions.innerHTML=`<button class="primary" id="addSpotBtn">＋ 加入行程</button><button class="sec" id="flySpotBtn">🧭 前往這裡</button>${spot.website?'<button class="sec" id="webSpotBtn" style="grid-column:1/-1">🔗 官方網站</button>':''}`;
+    }
+
+    const webBtn = $('#webSpotBtn');
+    if (webBtn && spot.website) webBtn.onclick=()=>window.open(spot.website,'_blank','noopener');
+    const addBtn = $('#addSpotBtn');
+    if (addBtn) addBtn.onclick=()=>addToItinerary(info||spot);
+    const flyBtn = $('#flySpotBtn');
+    if (flyBtn) flyBtn.onclick=()=>showTravelSpot(spot.name);
+
+    panel.dataset.tourSpot = String(spot.name);
+    panel.dataset.tourMode = tourPlaying ? 'tour' : 'normal';
+
+    // 只有換站時才換圖片，避免每幀重新觸發載入。
+    if (!sameSpot) loadSpotImage(spot);
+  }
+
+  // 導覽站數可能因手動上一站／下一站改變；只更新小標，不重建整個面板。
+  $('#spotBadge').textContent = `導覽 ${index + 1} / ${total}`;
+  panel.style.display = 'block';
+}
+
+function hideSpotPanel() {
+  $('#spotPanel').style.display = 'none';
+  const img = $('#spotImg');
+  if (img) { img.style.display = 'none'; img.removeAttribute('src'); }
+}
+
+function clearTourTargetLabel() {
+  tourTargetGroup.userData.currentSpotName = null;
+  while (tourTargetGroup.children.length) {
+    const child = tourTargetGroup.children.pop();
+    if (child) {
+      child.traverse(o => {
+        if (o.material) {
+          if (o.material.map) o.material.map.dispose();
+          o.material.dispose();
+        }
+        if (o.geometry) o.geometry.dispose();
+      });
+    }
+  }
+}
+
+function jumpTourStation(delta) {
+  if (!tourPlaying || !tourList.length) return;
+  const nextSeg = Math.max(0, Math.min(tourList.length - 1, seg + delta));
+  if (nextSeg === seg || !pathPts[nextSeg]) return;
+
+  // 上一站／下一站與自動導覽一樣採「飛行」過去，不再瞬移。
+  manualFlyFrom = pathPts[seg]?.clone?.() || pathPts[seg];
+  manualFlyTo = pathPts[nextSeg].clone();
+  manualFlyTargetIndex = nextSeg;
+  seg = nextSeg;
+  segT = 0;
+  tourPhase = 'manualFly';
+
+  const spot = tourList[nextSeg];
+  setTourTargetLabel(spot);
+  setTourTownOnly(spot);
+  $('#tourBar').textContent = '✈ 前往 ' + spot.name + '（第 ' + (nextSeg + 1) + ' / ' + tourList.length + ' 站）';
+  showSpotPanel(spot, nextSeg, tourList.length);
+}
+
+function setTourTargetLabel(spot) {
+  if (!spot) return;
+  if (tourTargetGroup.userData.currentSpotName === spot.name && tourTargetGroup.children.length) return;
+  setFocusedSpotView(spot,true);
+  tourTargetGroup.userData.currentSpotName = spot.name;
+}
+
+function setTourUi(active) {
+  const ui = $('#ui');
+  if (ui) ui.classList.toggle('tour-hidden', active);
+  const stop = $('#tourStop');
+  if (stop) stop.style.display = active ? 'block' : 'none';
+  const searchDock = $('#travelSearch');
+  const categoryDock = $('#categoryBar');
+  if (searchDock) searchDock.style.visibility = active ? 'hidden' : 'visible';
+  if (categoryDock) categoryDock.style.visibility = active ? 'hidden' : 'visible';
+  const hint = $('#hint');
+  if (hint) hint.style.display = active ? 'none' : 'block';
+
+  // 3D 導覽時清掉地圖上的縣市／鄉鎮文字，只留下目前目標地名。
+  if (active) {
+    cityLabelGroup.visible = false;
+    townLabelGroup.visible = false;
+    routeGroup.visible = false;
+    poiGroup.visible = false;
+    setTourTargetLabel(tourList[seg] || tourList[0]);
+  } else {
+    clearTourTargetLabel();
+    tourTargetGroup.visible = false;
+    routeGroup.visible = pathPts.length > 1;
+    roadVectorGroup.visible = !!$('#roads')?.checked;
+    poiGroup.visible = false;
+    cityLabelGroup.visible = !!$('#labels')?.checked;
+    updateTownLabelLOD();
+  }
+}
+
+function endTour() {
+  tourPlaying = false;
+  focusedSpotOnly = false;
+  manualFlyFrom = manualFlyTo = null;
+  manualFlyTargetIndex = -1;
+  clearTourTargetLabel();
+  tourTargetGroup.visible = false;
+  controls.enabled = true;
+  tourManualPauseUntil = 0;
+  setTourUi(false);
+  $('#spotPanel').dataset.tourSpot = '';
+  $('#spotPanel').dataset.tourMode = '';
+  $('#tourBar').textContent = '導覽結束';
+  setTimeout(() => {
+    $('#tourBar').style.display = 'none';
+    hideSpotPanel();
+  }, 1200);
+  $('#btnTour').disabled = !tourList.length;
+  $('#btnPlan').disabled = false;
+  camera.position.set(0, 300, 380);
+  controls.target.set(0, 20, 0);
+  controls.update();
+}
+
+let tourManualPauseUntil = 0;
+
+function startTour() {
+  if (!tourList.length) return;
+  pathPts = showRoute(tourList, currentTransport);
+  if (!pathPts.length) return;
+  tourPlaying = true;
+  focusedSpotOnly = true;
+  tourPhase = 'stay';
+  seg = 0; segT = 0;
+  controls.enabled = true;
+  tourManualPauseUntil = 0;
+  $('#btnTour').disabled = true;
+  $('#btnPlan').disabled = true;
+  setTourUi(true);
+  $('#tourBar').style.display = 'block';
+  $('#tourBar').textContent = '📍 ' + tourList[0].name;
+  showSpotPanel(tourList[0], 0, tourList.length);
+  camLookAt(pathPts[0], 55, 0.42);
+}
+
+function updateTour(dt, now=performance.now()) {
+  if (!tourPlaying || !pathPts.length) return;
+  if (now < tourManualPauseUntil) return;
+
+  // 每個景點總共顯示 10 秒：
+  // 前 8.5 秒停留，最後 1.5 秒平滑移動到下一站。
+  const T_STAY = 8.5;
+  const T_OUT = 0.35;
+  const T_FLY = 0.8;
+  const T_IN = 0.35;
+
+  segT += dt;
+  const from = pathPts[Math.min(seg, pathPts.length - 1)];
+  const to = pathPts[Math.min(seg + 1, pathPts.length - 1)];
+  const spot = tourList[Math.min(seg, tourList.length - 1)];
+  const style = transportStyle(currentTransport);
+
+  if (tourPhase === 'stay') {
+    // 只在剛抵達這一站時設定一次鏡頭；不要每幀 camLookAt，
+    // 這樣使用者可以拖曳、旋轉、縮放而不會被鏡頭搶回去。
+    if (segT < dt * 1.5) {
+      camLookAt(from, 52, 0.4);
+    }
+    setTourTargetLabel(spot);
+    setTourTownOnly(spot);
+    $('#tourBar').textContent = '📍 ' + spot.name + `（停留 ${Math.max(0,Math.ceil(T_STAY-segT))} 秒）`;
+    showSpotPanel(spot, seg, tourList.length);
+
+    if (segT >= T_STAY) {
+      if (seg >= pathPts.length - 1) {
+        endTour();
+        return;
+      }
+      tourPhase = 'zoomOut';
+      segT = 0;
+    }
+  } else if (tourPhase === 'zoomOut') {
+    const t = Math.min(1, segT / T_OUT);
+    const ease = t * t * (3 - 2 * t);
+    const dist = 52 + 25 * ease;
+    camLookAt(from, dist, 0.38 + 0.04 * ease);
+    $('#tourBar').textContent = '前往下一站…';
+    if (t >= 1) { tourPhase = 'fly'; segT = 0; }
+  } else if (tourPhase === 'fly') {
+    const t = Math.min(1, segT / T_FLY);
+    const ease = t * t * (3 - 2 * t);
+    const cur = new THREE.Vector3().lerpVectors(from, to, ease);
+    cur.y += style.arc * Math.sin(Math.PI * ease);
+    camLookAt(cur, 77, 0.45);
+    const next = tourList[seg + 1];
+    setTourTargetLabel(next);
+    setTourTownOnly(next);
+    $('#tourBar').textContent = style.label + ' → ' + next.name;
+    if (t >= 1) { tourPhase = 'zoomIn'; segT = 0; }
+  } else if (tourPhase === 'zoomIn') {
+    const next = tourList[seg + 1];
+    setTourTargetLabel(next);
+    setTourTownOnly(next);
+    const t = Math.min(1, segT / T_IN);
+    const ease = t * t * (3 - 2 * t);
+    const dist = 77 - 25 * ease;
+    camLookAt(to, dist, 0.42);
+    $('#tourBar').textContent = '📍 抵達 ' + next.name;
+    if (t >= 1) {
+      seg++;
+      segT = 0;
+      tourPhase = 'stay';
+      setTourTownOnly(tourList[seg]);
+      showSpotPanel(tourList[seg], seg, tourList.length);
+    }
+  } else if (tourPhase === 'manualFly') {
+    const next = tourList[manualFlyTargetIndex];
+    if (!next || !manualFlyFrom || !manualFlyTo) {
+      tourPhase = 'stay';
+      segT = 0;
+      return;
+    }
+    const T_MANUAL = 1.25;
+    const t = Math.min(1, segT / T_MANUAL);
+    const ease = t * t * (3 - 2 * t);
+    const cur = new THREE.Vector3().lerpVectors(manualFlyFrom, manualFlyTo, ease);
+    cur.y += transportStyle(currentTransport).arc * 0.7 * Math.sin(Math.PI * ease);
+    // 飛行途中只保留「要前往的目標鄉鎮／景點」，避免畫面重新冒出其他標籤。
+    setTourTargetLabel(next);
+    setTourTownOnly(next);
+    camLookAt(cur, 77 - 25 * ease, 0.45);
+    $('#tourBar').textContent = '✈ 前往 ' + next.name + '（' + Math.ceil((1 - t) * T_MANUAL) + ' 秒）';
+    if (t >= 1) {
+      manualFlyFrom = manualFlyTo = null;
+      manualFlyTargetIndex = -1;
+      segT = 0;
+      tourPhase = 'stay';
+      setTourTargetLabel(next);
+      setTourTownOnly(next);
+      showSpotPanel(next, seg, tourList.length);
+    }
+  }
+}
+
+$('#btnPlan').onclick = () => { plan(); };
+try {
+  const u = localStorage.getItem('tw_ollama_url');
+  const m = localStorage.getItem('tw_ollama_model');
+  if (u && $('#ollamaUrl')) $('#ollamaUrl').value = u;
+  if (m && $('#ollamaModel')) $('#ollamaModel').value = m;
+} catch (_) {}
+$('#btnTour').onclick = startTour;
+$('#tourStop').onclick = endTour;
+controls.addEventListener('start', () => { if (tourPlaying) tourManualPauseUntil = performance.now() + 2500; });
+$('#cityAll').onclick = () => {
+  document.querySelectorAll('input[name="city"]').forEach(el => { el.checked = true; });
+};
+$('#cityNone').onclick = () => {
+  document.querySelectorAll('input[name="city"]').forEach(el => { el.checked = false; });
+};
+$('#btnReset').onclick = () => {
+  endTour();
+};
+$('#roads').onchange = e => {
+  if (roadMesh) roadMesh.visible = e.target.checked;
+  roadVectorGroup.visible = e.target.checked;
+  group.children.forEach(ch => {
+    if (ch.name === 'nlscRoad') ch.visible = e.target.checked;
+  });
+};
+$('#labels').onchange = e => { cityLabelGroup.visible = e.target.checked; };
+$('#towns').onchange = e => {
+  townLabelGroup.visible = e.target.checked;
+  updateTownLabelLOD();
+};
+
+document.querySelectorAll('.cat-btn').forEach(b=>b.onclick=()=>applyCategory(b.dataset.cat));
+$('#spotSearch').addEventListener('input',e=>renderSearchResults(e.target.value));
+$('#spotSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){const first=$('#searchResults [data-spot]');if(first)first.click();}});
+$('#clearSearch').onclick=()=>{$('#spotSearch').value='';$('#searchResults').style.display='none';$('#categoryBar').style.visibility='visible';};
+$('#btnItClear').onclick=()=>{itinerary=[];renderItinerary();};
+$('#btnItTour').onclick=()=>{if(itinerary.length){tourList=itinerary.map(s=>({...s,lon:POI_COORDS[s.name][0],lat:POI_COORDS[s.name][1],aiText:s.desc}));currentTransport=$('#transport').value||'大眾運輸';startTour();}};
+const raycaster=new THREE.Raycaster(), pointer=new THREE.Vector2();
+// 地圖不再放 5,000+ 可見 POI 球；景點從搜尋／分類結果點選後聚焦。
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+let last = performance.now();
+(function animate(now) {
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (tourPlaying) updateTour(dt, now);
+  else controls.update();
+  updateTownLabelLOD();
+  renderer.render(scene, camera);
+})();
+
+async function main() {
+  try {
+    const boundary = await getBoundary();
+    terrainInfo = await buildDEM(boundary);
+    addCityLabels();
+    const attractionCount = await loadTourismAttractions();
+    addPOIMarkers();
+    const nTowns = await loadAllTowns();
+    // 道路改成背景載入：即使道路服務逾時，網站也不會卡在第 ③ 步。
+    bar.style.width = '100%';
+    loadText.textContent = '完成';
+    setTimeout(() => { $('#loading').style.display = 'none'; }, 400);
+    msg(
+      `地形就緒｜觀光署景點 ${attractionCount.toLocaleString()} 筆｜鄉鎮約 ${nTowns} 筆｜道路背景載入中｜可規劃行程`
+    );
+    loadRoads().then(ok => {
+      if (ok) msg(
+        `地形就緒｜觀光署景點 ${attractionCount.toLocaleString()} 筆｜鄉鎮約 ${nTowns} 筆｜道路：NLSC ROAD｜可規劃行程`
+      );
+    });
+  } catch (e) {
+    console.error(e);
+    loadText.textContent = '載入失敗：' + (e.message || e);
+    msg('載入失敗，請檢查網路後重新整理');
+  }
+}
+main();
+</script>
+</body>
+</html>
