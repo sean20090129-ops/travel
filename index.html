@@ -50,12 +50,6 @@ button.mini{width:auto;margin:0;padding:6px 10px;font-size:11px;font-weight:600;
 #ui .map-title{margin-top:17px}
 #btnPlan{margin-top:15px}
 #result{margin-top:12px;padding:12px;border-radius:13px;background:rgba(13,39,50,.82);border:1px solid var(--line);font-size:12px;line-height:1.65;white-space:pre-wrap;color:#d8e8e9;min-height:54px}
-#planVisuals{display:grid;gap:9px;margin-top:9px}
-.plan-card{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:8px;border:1px solid var(--line);border-radius:12px;background:rgba(13,39,50,.72);cursor:pointer}
-.plan-card img{width:92px;height:64px;object-fit:cover;border-radius:9px;background:rgba(255,255,255,.06)}
-.plan-card h4{margin:1px 0 3px;font-size:12px;color:#fff2d6}
-.plan-card .pc-meta{font-size:9px;color:#86a4ad;margin-bottom:3px}
-.plan-card p{margin:0;font-size:10px;line-height:1.5;color:#c9dadd;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 #status{display:none}
 #dataSource{margin-top:10px!important;font-size:9px!important;color:#718a92!important;line-height:1.45;opacity:.8}
 #hint{display:none}
@@ -210,9 +204,6 @@ button.mini{width:auto;margin:0;padding:6px 10px;font-size:11px;font-weight:600;
   <label>旅遊偏好</label>
   <textarea id="extra" placeholder="旅遊偏好"></textarea>
 
-  <input type="hidden" id="ollamaUrl" value="http://localhost:11434">
-  <input type="hidden" id="ollamaModel" value="qwen3:8b">
-
   <div class="section-title action-title">03　開始規劃</div>
   <button id="btnPlan">✨ 產生智慧行程</button>
   <button class="tour" id="btnTour" disabled>▶ 開始 3D 導覽</button>
@@ -228,7 +219,6 @@ button.mini{width:auto;margin:0;padding:6px 10px;font-size:11px;font-weight:600;
   
 
   <div id="result">尚未建立行程</div>
-  <div id="planVisuals"></div>
   <div id="status">準備載入地形…</div>
   <div id="dataSource" style="margin-top:7px;font-size:10px;color:#6f8798">景點資料：觀光署開放資料（載入中）</div>
 </div>
@@ -474,10 +464,7 @@ let roadMesh = null;
 let tourList = [];
 let tourPlaying = false;
 let currentTransport = '大眾運輸';
-let tourPhase = 'stay'; // stay | zoomOut | fly | zoomIn | manualFly
-let focusedSpotOnly = false;
-let manualFlyFrom = null, manualFlyTo = null;
-let manualFlyTargetIndex = -1;
+let tourPhase = 'stay'; // stay | zoomOut | fly | zoomIn
 
 let pathPts = [];
 let seg = 0, segT = 0;
@@ -869,10 +856,6 @@ async function loadAllTowns() {
 }
 
 function updateTownLabelLOD() {
-  // 聚焦景點或 3D 導覽時，禁止 LOD 把其他鄉鎮重新顯示出來。
-  // 這裡必須直接 return，否則 animate() 每幀都會覆蓋 setTourTownOnly()。
-  if (focusedSpotOnly) return;
-  if (tourPlaying) return;
   if (!$('#towns').checked) {
     townLabelGroup.visible = false;
     return;
@@ -1025,20 +1008,6 @@ function extractTourismCity(raw) {
   return m ? m[1] : '';
 }
 
-function extractTourismTown(raw) {
-  // 優先抓官方 LocatedCities / PostalAddress 內的鄉鎮市區欄位。
-  const town =
-    findNestedText(raw?.LocatedCities, ['Town', 'town', 'Township', 'township', 'District', 'district', 'TownName', 'townName', 'DistrictName', 'districtName']) ||
-    findNestedText(raw?.PostalAddress, ['Town', 'town', 'Township', 'township', 'District', 'district', 'TownName', 'townName', 'DistrictName', 'districtName']) ||
-    firstText(raw?.Town, raw?.town, raw?.Township, raw?.township, raw?.District, raw?.district);
-  if (town) return town;
-
-  // 地址若是純字串，再從縣市後面擷取第一個「區／鄉／鎮／市」。
-  const address = firstText(raw?.Address, raw?.address, raw?.PostalAddress, raw?.postalAddress);
-  const m = String(address).match(/(?:臺北市|台北市|新北市|基隆市|桃園市|新竹市|新竹縣|苗栗縣|臺中市|台中市|彰化縣|南投縣|雲林縣|嘉義市|嘉義縣|臺南市|台南市|高雄市|屏東縣|宜蘭縣|花蓮縣|臺東縣|台東縣|澎湖縣)([^0-9，,\s]{1,8}(?:區|鄉|鎮|市))/);
-  return m ? m[1] : '';
-}
-
 function extractUrl(value) {
   if (!value) return '';
   if (typeof value === 'string') {
@@ -1059,11 +1028,9 @@ function extractUrl(value) {
 }
 
 function extractImageUrls(value, out = []) {
-  if (!value || out.length >= 10) return out;
+  if (!value || out.length >= 6) return out;
   if (typeof value === 'string') {
-    const s = value.trim();
-    // 觀光署圖片有些網址沒有副檔名，因此不能只靠 .jpg/.png 判斷。
-    if (/^https?:\/\//i.test(s)) out.push(s);
+    if (/https?:\/\//i.test(value) && /\.(jpe?g|png|webp)(\?|$)/i.test(value)) out.push(value);
     return out;
   }
   if (Array.isArray(value)) {
@@ -1071,11 +1038,9 @@ function extractImageUrls(value, out = []) {
     return out;
   }
   if (typeof value === 'object') {
-    for (const [k,v] of Object.entries(value)) {
-      if (/url|image|picture|photo|src/i.test(k) || typeof v === 'object') extractImageUrls(v, out);
-    }
+    for (const v of Object.values(value)) extractImageUrls(v, out);
   }
-  return [...new Set(out)];
+  return out;
 }
 
 function normalizeTourismSpot(raw) {
@@ -1086,7 +1051,6 @@ function normalizeTourismSpot(raw) {
   if (lon < 119.0 || lon > 122.5 || lat < 21.5 || lat > 25.6) return null;
 
   const city = extractTourismCity(raw);
-  const town = extractTourismTown(raw);
   const desc = firstText(raw.Description, raw.description, raw.Introduction, raw.introduction);
   const classes = firstText(raw.AttractionClasses, raw.attractionClasses, raw.Category, raw.category);
   const tags = [];
@@ -1105,8 +1069,7 @@ function normalizeTourismSpot(raw) {
   for (const [tag,re] of rules) if (re.test(text)) tags.push(tag);
   if (!tags.length) tags.push('文化');
 
-  const images = extractImageUrls(raw.Images || raw.images);
-  const image = images[0] || extractUrl(raw.Images || raw.images);
+  const image = extractImageUrls(raw.Images || raw.images)[0] || extractUrl(raw.Images || raw.images);
   const website = firstText(raw.WebsiteURL, raw.websiteURL, raw.Website, raw.website);
   const address = firstText(raw.PostalAddress, raw.postalAddress, raw.Address, raw.address);
   const service = firstText(raw.ServiceTimeInfo, raw.serviceTimeInfo, raw.OpeningHours, raw.openingHours);
@@ -1117,8 +1080,8 @@ function normalizeTourismSpot(raw) {
   const visit = firstText(raw.VisitDuration, raw.visitDuration);
   const id = firstText(raw.AttractionID, raw.attractionID, raw.ID, raw.id);
   return {
-    id, name, city, town, cats: tags, tags: tags.slice(0,4), desc: desc || '觀光署景點資料暫無詳細介紹。',
-    lon, lat, image, images, website, address, service, traffic, parking, fee, phone, visit,
+    id, name, city, cats: tags, tags: tags.slice(0,4), desc: desc || '觀光署景點資料暫無詳細介紹。',
+    lon, lat, image, website, address, service, traffic, parking, fee, phone, visit,
     source: '交通部觀光署觀光資訊資料庫', sourceUrl: TOURISM_DATA_PAGE
   };
 }
@@ -1212,73 +1175,13 @@ function renderItinerary(){
 function mergeSpotForPanel(name){
   const base=spotInfo(name);
   if(!base) return {name,city:'',tags:[],desc:'暫無景點資料'};
-  return {name:base.name,city:base.city,town:base.town,tags:base.tags,desc:base.desc,aiText:base.desc,lon:base.lon ?? POI_COORDS[base.name]?.[0],lat:base.lat ?? POI_COORDS[base.name]?.[1],image:base.image,website:base.website,address:base.address,service:base.service,traffic:base.traffic,parking:base.parking,fee:base.fee,phone:base.phone,visit:base.visit,source:base.source,sourceUrl:base.sourceUrl};
+  return {name:base.name,city:base.city,tags:base.tags,desc:base.desc,aiText:base.desc,lon:base.lon ?? POI_COORDS[base.name]?.[0],lat:base.lat ?? POI_COORDS[base.name]?.[1],image:base.image,website:base.website,address:base.address,service:base.service,traffic:base.traffic,parking:base.parking,fee:base.fee,phone:base.phone,visit:base.visit,source:base.source,sourceUrl:base.sourceUrl};
 }
-
-function canonicalPlaceName(v=''){
-  return String(v||'')
-    .trim()
-    .replace(/^臺/g,'台')
-    .replace(/台灣|臺灣/g,'')
-    .replace(/\s+/g,'')
-    .replace(/[區鄉鎮市]$/,'$&');
-}
-
-function extractSpotTown(spot){
-  if(!spot) return '';
-  return String(spot.town || spot.district || '').trim();
-}
-
-function setTourTownOnly(spot){
-  // 不論「單點放大」或「3D 導覽」，都只顯示目前景點所屬的鄉鎮。
-  // 優先比對官方資料的鄉鎮名稱；沒有鄉鎮資料時才退回座標最近的鄉鎮。
-  if(!spot){
-    townLabelGroup.visible = false;
-    return;
-  }
-  const town = canonicalPlaceName(extractSpotTown(spot));
-  const lon=Number(spot.lon), lat=Number(spot.lat);
-  if(!Number.isFinite(lon)||!Number.isFinite(lat)){
-    townLabelGroup.visible = false;
-    return;
-  }
-  const x=lonX(lon), z=latZ(lat);
-  let best=null, bestD=Infinity;
-
-  // 1) 先用官方鄉鎮名稱精準配對。
-  if(town){
-    townLabelGroup.children.forEach(ch=>{
-      const ud=ch.userData||{};
-      if(!ud.isTownLabel) return;
-      const candidates=[ud.shortName, ud.fullName].map(canonicalPlaceName);
-      if(candidates.includes(town)){ best=ch; }
-    });
-  }
-
-  // 2) 沒有精準名稱時，用景點座標找最近的鄉鎮標籤。
-  if(!best){
-    townLabelGroup.children.forEach(ch=>{
-      const ud=ch.userData||{};
-      if(!ud.isTownLabel) return;
-      const d=(ud.wx-x)**2+(ud.wz-z)**2;
-      if(d<bestD){ bestD=d; best=ch; }
-    });
-  }
-
-  townLabelGroup.children.forEach(ch=>{
-    const ud=ch.userData||{};
-    if(ud.isTownLabel) ch.visible = (ch===best);
-  });
-  townLabelGroup.visible=!!best;
-}
-
 function setFocusedSpotView(spot, showTown=true){
-  // 聚焦景點時只留下「目標景點 + 目標鄉鎮」；其他縣市、鄉鎮、POI 全部隱藏。
-  // 導覽與單點放大共用同一套顯示規則。
-  focusedSpotOnly = !!spot;
+  // 聚焦景點時只留下「目標景點」；不再顯示任何其他鄉鎮名稱。
+  // 目標上方放置置中的景點名稱，並用一條垂直引導線直接連到地表。
   cityLabelGroup.visible=false;
   townLabelGroup.visible=false;
-  setTourTownOnly(spot);
   poiGroup.visible=false;
   routeGroup.visible=false;
   clearTourTargetLabel();
@@ -1403,8 +1306,7 @@ function themeProfile(keywords=[]) {
     {key:'海岸', words:['海','海岸','海灘','濕地'], tags:['海岸'], re:/海|海岸|海灘|濕地|港|島|湖泊|溪|潭/},
     {key:'溫泉', words:['溫泉','泡湯'], tags:['溫泉'], re:/溫泉|泡湯/},
     // 特定活動／主題：讓「鹿野熱氣球」這類複合關鍵字能命中官方景點介紹。
-    {key:'熱氣球', words:['熱氣球','氣球嘉年華','熱氣球嘉年華','鹿野高台','鹿野'], tags:['自然'], re:/熱氣球|氣球嘉年華|鹿野高台|鹿野/},
-    {key:'廟宇', words:['廟宇','寺廟','古廟','廟','寺','宮','祠','殿','堂','庵','壇'], tags:['文化'], re:/廟宇|寺廟|古廟|廟|寺|宮|祠|殿|堂|庵|壇/}
+    {key:'熱氣球', words:['熱氣球','氣球嘉年華','熱氣球嘉年華','鹿野高台','鹿野'], tags:['自然'], re:/熱氣球|氣球嘉年華|鹿野高台|鹿野/}
   ];
   return profiles.filter(p => text.includes(p.key) || p.words.some(w=>text.includes(w)));
 }
@@ -1432,13 +1334,6 @@ function spotRelevance(spot, profiles, extraText='') {
     if ((spot.cats||[]).some(t=>p.tags.includes(t))) score += 12;
     if (p.re.test(hay)) score += 10;
     for (const w of p.words) if (hay.includes(w)) score += 3;
-  }
-  // 明確輸入「廟宇／寺廟」時，提高真正宗教建築的權重，
-  // 避免只因「文化」分類就把一般博物館、老街排在廟宇前面。
-  if (profiles.some(p=>p.key==='廟宇')) {
-    const templeHit = /廟宇|寺廟|古廟|廟|寺|宮|祠|殿|堂|庵|壇/.test(hay);
-    if (templeHit) score += 45;
-    else score -= 8;
   }
   // 親子條件：不要把「教育」直接等同於親子，但給真正親子景點額外加分。
   if (profiles.some(p=>p.key==='親子') && (spot.cats||[]).includes('親子')) score += 8;
@@ -1473,6 +1368,14 @@ function routeByNearest(spots) {
   return out;
 }
 
+
+function normalizeSpotName(name='') {
+  return String(name || '')
+    .replace(/[（(].*?[）)]/g, '')
+    .replace(/\s+/g, '')
+    .trim();
+}
+
 function buildDeterministicItinerary(ctx) {
   const profiles = themeProfile([ctx.theme || '', ...(ctx.kws || [])].filter(Boolean));
   const selectedRaw = ctx.cities || [];
@@ -1493,23 +1396,8 @@ function buildDeterministicItinerary(ctx) {
     return { profiles, days: [], spots: [], reason: 'city' };
   }
 
-  // 「廟宇／寺廟」是高度明確的主題：若官方資料中有足夠命中，
-  // 就只從廟宇相關景點挑選，不讓一般文化景點混進來。
-  let candidatePool = pool;
-  const hasTempleTheme = profiles.some(p => p.key === '廟宇') ||
-    /廟宇|寺廟|古廟/.test(extra);
-  if (hasTempleTheme) {
-    const templePool = pool.filter(s => {
-      const hay = `${s.name} ${s.city} ${(s.cats||[]).join(' ')} ${(s.tags||[]).join(' ')} ${s.desc||''}`;
-      return /廟宇|寺廟|古廟|廟|寺|宮|祠|殿|堂|庵|壇/.test(hay);
-    });
-    const needed = Math.max(1, ctx.days * (ctx.days <= 1 ? 3 : 2));
-    // 至少有兩個候選就進入「廟宇專用池」；不足時才允許一般文化景點補位。
-    if (templePool.length >= Math.min(needed, 2)) candidatePool = templePool;
-  }
-
   // 依主題相關度排序；真正的主題景點優先，但不足時自動補入同縣市景點。
-  const rankedPool = [...candidatePool].sort((a,b) =>
+  const rankedPool = [...pool].sort((a,b) =>
     spotRelevance(b, profiles, extra) - spotRelevance(a, profiles, extra)
   );
 
@@ -1534,17 +1422,17 @@ function buildDeterministicItinerary(ctx) {
   // 一天盡量對應一個縣市；縣市多於天數時，依使用者選擇順序安排。
   for (let d = 0; d < ctx.days; d++) {
     const city = cities[d % cities.length];
-    const arr = (groups.get(city) || []).filter(s => !used.has(s.name));
+    const arr = (groups.get(city) || []).filter(s => !used.has(normalizeSpotName(s.name)));
     if (!arr.length) continue;
 
     const chosen = [];
     // 第一站：主題相關度最高。
     chosen.push(arr[0]);
-    used.add(arr[0].name);
+    used.add(normalizeSpotName(arr[0].name));
 
     // 後續：在同縣市中找「離上一站近」且仍有主題分數的景點。
     while (chosen.length < targetPerDay) {
-      const remain = arr.filter(s => !used.has(s.name));
+      const remain = arr.filter(s => !used.has(normalizeSpotName(s.name)));
       if (!remain.length) break;
       const last = chosen[chosen.length - 1];
       remain.sort((a,b) => {
@@ -1553,7 +1441,7 @@ function buildDeterministicItinerary(ctx) {
         return sb - sa;
       });
       chosen.push(remain[0]);
-      used.add(remain[0].name);
+      used.add(normalizeSpotName(remain[0].name));
     }
 
     if (chosen.length) days.push({ day: d + 1, city, spots: routeByNearest(chosen) });
@@ -1563,10 +1451,10 @@ function buildDeterministicItinerary(ctx) {
   if (days.length < ctx.days) {
     for (const city of cities) {
       if (days.length >= ctx.days) break;
-      const remain = (groups.get(city) || []).filter(s => !used.has(s.name));
+      const remain = (groups.get(city) || []).filter(s => !used.has(normalizeSpotName(s.name)));
       if (!remain.length) continue;
       const chosen = remain.slice(0, targetPerDay);
-      chosen.forEach(s => used.add(s.name));
+      chosen.forEach(s => used.add(normalizeSpotName(s.name)));
       days.push({ day: days.length + 1, city, spots: routeByNearest(chosen) });
     }
   }
@@ -1574,64 +1462,86 @@ function buildDeterministicItinerary(ctx) {
   const all = days.flatMap(d => d.spots);
   return { profiles, days, spots: all, reason: all.length ? '' : 'insufficient' };
 }
-async function ollamaPlan(ctx) {
-  const base=(($('#ollamaUrl').value||'http://localhost:11434').replace(/\/$/,''));
-  const model=(($('#ollamaModel').value||'qwen3:8b').trim());
-  const plan=buildDeterministicItinerary(ctx);
-  if(!plan.spots.length) throw new Error(plan.reason==='city' ? `目前勾選的縣市沒有可用景點。觀光署已載入 ${TRAVEL_SPOTS.length.toLocaleString()} 筆，請確認縣市資料或重新整理。` : '目前資料筆數不足，請增加天數可用的縣市或重新整理載入觀光署資料。');
+async function makePlan(ctx) {
+  const plan = buildDeterministicItinerary(ctx);
+  if (!plan.spots.length) {
+    throw new Error(
+      plan.reason === 'city'
+        ? `目前勾選的縣市沒有可用景點（已載入 ${TRAVEL_SPOTS.length.toLocaleString()} 筆）。請改選其他縣市或重新整理。`
+        : '景點資料不足，請重新整理後再試。'
+    );
+  }
 
-  // Qwen 不再負責「挑景點」：網站先依官方資料、主題與地理位置完成行程，再請模型只做短摘要。
-  let aiSummary='依旅遊主題與其他關鍵字安排重點景點，並以同縣市就近移動為主。';
+  let aiSummary = '依旅遊主題與其他關鍵字安排重點景點，並以同縣市就近移動為主。';
+  let summarySource = '規則';
+
+  // 可選：呼叫 Vercel /api/plan-summary（Gemini）。失敗不影響行程。
   try {
-    const allowed=plan.spots.map((s,i)=>`${i+1}. ${s.name}｜${canonCity(s.city)}｜${(s.cats||[]).join('、')}｜${String(s.desc||'').slice(0,120)}`).join('\n');
-    const system='你是台灣旅遊網站的行程摘要助手，只用繁體中文。景點已由網站決定，你不能新增、刪除、替換、重新排序景點，也不能發明地址、座標、票價、營業時間。只能根據提供的景點資料寫一段55字內、簡潔實用的行程摘要。只輸出JSON：{"summary":"..."}。';
-    const user=`需求：${ctx.days}天、${ctx.people}人（${ctx.members}）、${ctx.transport}、縣市：${(ctx.cities||[]).join('、')||'未指定'}、旅遊主題：${ctx.theme||'未指定'}、其他關鍵字：${(ctx.kws||[]).join('、')||'無'}、補充：${ctx.extra||'無'}\n已確定景點：\n${allowed}`;
-    const r=await fetch(base+'/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,temperature:0.15,messages:[{role:'system',content:system},{role:'user',content:user}]})});
-    if(r.ok){
-      const data=await r.json(); let raw=data.choices?.[0]?.message?.content||''; raw=raw.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```$/i,'').trim();
-      const m=raw.match(/\{[\s\S]*\}/); if(m){const j=JSON.parse(m[0]); if(typeof j.summary==='string'&&j.summary.trim()) aiSummary=j.summary.trim().slice(0,80);}
+    const allowed = plan.spots.map((s, i) =>
+      `${i + 1}. ${s.name}｜${canonCity(s.city)}｜${(s.cats || s.tags || []).join('、')}`
+    ).join('\n');
+    const r = await fetch('/api/plan-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        days: ctx.days,
+        people: ctx.people,
+        transport: ctx.transport,
+        cities: ctx.cities,
+        theme: ctx.theme,
+        kws: ctx.kws,
+        extra: ctx.extra,
+        spotsText: allowed
+      })
+    });
+    if (r.ok) {
+      const j = await r.json();
+      if (j && typeof j.summary === 'string' && j.summary.trim()) {
+        aiSummary = j.summary.trim().slice(0, 80);
+        summarySource = 'AI';
+      }
     }
-  } catch(e) { console.warn('Ollama 摘要失敗，改用網站摘要：',e); }
+  } catch (e) {
+    console.warn('摘要 API 略過，使用預設摘要：', e);
+  }
 
-  const spots=plan.spots.map(s=>({name:s.name,city:s.city,town:s.town,lon:Number(s.lon),lat:Number(s.lat),tags:s.tags||s.cats||[],desc:s.desc,aiText:s.desc,image:s.image,images:s.images||[],website:s.website,address:s.address,service:s.service,fee:s.fee,phone:s.phone,visit:s.visit,source:s.source,sourceUrl:s.sourceUrl,coordFixed:true}));
-  let text=`【AI 行程】${ctx.days}天 · ${ctx.people}人 · ${ctx.transport}\n`;
-  if(ctx.cities.length) text+=`縣市：${ctx.cities.join('、')}\n`;
-  if(ctx.theme) text+=`主題：${ctx.theme}\n`;
-  if(ctx.kws.length) text+=`關鍵字：${ctx.kws.join('、')}\n`;
-  text+=`\n${aiSummary}\n`;
-  text+='\n【行程】\n';
-  plan.days.forEach(d=>{text+=`Day ${d.day}｜${d.city}：${d.spots.map(s=>s.name).join(' → ')}\n`;});
-  text+='\n【景點簡介】\n';
-  plan.spots.forEach((s,i)=>{
-    const intro=String(s.desc||'暫無介紹').replace(/\s+/g,' ').trim();
-    text+=`${i+1}. ${s.name}｜${intro.slice(0,72)}${intro.length>72?'…':''}\n`;
+  const spots = plan.spots.map(s => ({
+    name: s.name,
+    city: s.city,
+    lon: Number(s.lon),
+    lat: Number(s.lat),
+    tags: s.tags || s.cats || [],
+    desc: s.desc,
+    aiText: s.desc,
+    coordFixed: true
+  }));
+
+  let text = `【行程】${ctx.days}天 · ${ctx.people}人 · ${ctx.transport}\n`;
+  if (ctx.cities.length) text += `縣市：${ctx.cities.join('、')}\n`;
+  if (ctx.theme) text += `主題：${ctx.theme}\n`;
+  if (ctx.kws && ctx.kws.length) text += `關鍵字：${ctx.kws.join('、')}\n`;
+  text += `\n${aiSummary}\n`;
+  text += '\n【每日】\n';
+  plan.days.forEach(d => {
+    text += `Day ${d.day}｜${d.city}：${d.spots.map(s => s.name).join(' → ')}\n`;
   });
 
-  const caution=[];
-  if(/大眾|公車|火車|台鐵|高鐵/.test(ctx.transport||'')) caution.push('大眾運輸請先確認班次與末班車');
-  if(/自駕|汽車|機車|開車/.test(ctx.transport||'')) caution.push('自駕請確認停車與山路路況');
-  if(plan.spots.some(s=>/山|森林|步道|高台|高山/.test(`${s.name}${s.tags.join('')}${s.desc}`))) caution.push('山區天氣變化快，步道請依現場狀況調整');
-  if(plan.spots.some(s=>/海|灘|港|濕地|海岸/.test(`${s.name}${s.tags.join('')}${s.desc}`))) caution.push('海岸風浪與潮汐請留意現場公告');
-  if(/熱氣球|氣球/.test(`${ctx.theme} ${(ctx.kws||[]).join(' ')}`)) caution.push('熱氣球活動受天候影響，出發前確認活動日期與飛行狀況');
+  const caution = [];
+  if (/大眾|公車|火車|台鐵|高鐵/.test(ctx.transport || '')) caution.push('大眾運輸請先確認班次與末班車');
+  if (/自駕|汽車|機車|開車/.test(ctx.transport || '')) caution.push('自駕請確認停車與山路路況');
+  if (plan.spots.some(s => /山|森林|步道|高台|高山/.test(`${s.name}${(s.tags || []).join('')}${s.desc || ''}`))) {
+    caution.push('山區天氣變化快，步道請依現場狀況調整');
+  }
+  if (plan.spots.some(s => /海|灘|港|濕地|海岸/.test(`${s.name}${(s.tags || []).join('')}${s.desc || ''}`))) {
+    caution.push('海岸風浪與潮汐請留意現場公告');
+  }
   caution.push('景點開放時間、票價及活動資訊請出發前確認');
-  text+='\n【注意事項】\n';
-  [...new Set(caution)].slice(0,4).forEach((x,i)=>{ text+=`${i+1}. ${x}\n`; });
-  text+='\n景點由網站資料庫依主題與關鍵字挑選；Qwen 僅負責短摘要。';
-  return {text,spots};
-}
-
-function renderPlanVisuals(spots){
-  const box=$('#planVisuals');
-  if(!box) return;
-  if(!spots?.length){ box.innerHTML=''; return; }
-  box.innerHTML=spots.map((s,i)=>{
-    const src=s.image || '';
-    const intro=String(s.desc||'暫無介紹').replace(/\s+/g,' ').trim();
-    return `<div class="plan-card" data-plan-spot="${encodeURIComponent(s.name)}">`+
-      `<img src="${src}" alt="${s.name}" onerror="this.style.display='none'">`+
-      `<div><h4>${i+1}. ${s.name}</h4><div class="pc-meta">${s.city||''} · ${(s.tags||[]).slice(0,3).join('、')}</div><p>${intro}</p></div></div>`;
-  }).join('');
-  box.querySelectorAll('[data-plan-spot]').forEach(el=>el.onclick=()=>showTravelSpot(decodeURIComponent(el.dataset.planSpot)));
+  text += '\n【注意事項】\n';
+  [...new Set(caution)].slice(0, 4).forEach((x, i) => { text += `${i + 1}. ${x}\n`; });
+  text += summarySource === 'AI'
+    ? '\n景點由網站資料庫挑選；摘要由雲端 AI 產生。'
+    : '\n景點由網站資料庫依主題與關鍵字挑選（摘要為預設說明）。';
+  return { text, spots };
 }
 
 async function plan() {
@@ -1645,33 +1555,24 @@ async function plan() {
   const extra = ($('#extra').value || '').trim();
   const ctx = { days, transport, people, members, extra, theme, kws, cities };
 
-  localStorage.setItem('tw_ollama_url', $('#ollamaUrl').value || '');
-  localStorage.setItem('tw_ollama_model', $('#ollamaModel').value || '');
-
   $('#btnPlan').disabled = true;
-  $('#result').textContent = 'Ollama 規劃中（本機模型可能需數十秒）…';
-  renderPlanVisuals([]);
-  msg('正在呼叫 Ollama…');
+  $('#result').textContent = '正在規劃行程…';
+  msg('規劃中…');
 
   try {
-    const { text, spots } = await ollamaPlan(ctx);
+    const { text, spots } = await makePlan(ctx);
     tourList = spots;
-    itinerary = spots.map(s=>spotInfo(s.name)||s);
+    itinerary = spots.map(s => spotInfo(s.name) || s);
     renderItinerary();
     currentTransport = transport;
     pathPts = showRoute(spots, transport);
     $('#btnTour').disabled = spots.length < 1;
     $('#result').textContent = text;
-    renderPlanVisuals(spots);
-    msg('Ollama 行程已產生，地圖已標點');
+    msg('行程已產生，地圖已標點');
   } catch (e) {
     console.error(e);
-    $('#result').textContent =
-      'Ollama 失敗：' + (e.message || e) +
-      '\n\n請確認：\n1. 本機已執行 ollama serve\n2. 已 ollama pull 模型（預設 qwen3:8b）\n' +
-      '3. 允許跨域：PowerShell 可設 $env:OLLAMA_ORIGINS=\"*\" 後重開 ollama\n' +
-      '4. 本頁必須用 http://localhost 開啟';
-    msg('Ollama 連線或回傳失敗');
+    $('#result').textContent = '規劃失敗：' + (e.message || e);
+    msg('規劃失敗');
     tourList = [];
     $('#btnTour').disabled = true;
   } finally {
@@ -1695,55 +1596,32 @@ async function loadSpotImage(spot) {
   if (!img || !spot) return;
   img.style.display = 'none';
   img.removeAttribute('src');
-
-  // 依序嘗試：觀光署全部圖片 → Wikipedia → Wikimedia Commons。
-  const official = [ ...(Array.isArray(spot.images) ? spot.images : []), spot.image || '' ].filter(Boolean);
-  const candidates = [...new Set(official)];
-
-  const tryImage = (urls, i = 0) => new Promise(resolve => {
-    if (i >= urls.length) return resolve(false);
-    const test = new Image();
-    test.onload = () => {
-      img.src = urls[i];
-      img.style.display = 'block';
-      resolve(true);
-    };
-    test.onerror = () => tryImage(urls, i + 1).then(resolve);
-    test.src = urls[i];
-  });
-
-  if (await tryImage(candidates)) return;
-
-  // Wikipedia 摘要縮圖
+  const q = encodeURIComponent((spot.name || '') + ' 台灣');
+  // 1) 觀光署資料庫圖片
+  if (spot.image) {
+    img.onload = () => { img.style.display = 'block'; };
+    img.onerror = () => { img.style.display = 'none'; };
+    img.src = spot.image;
+    return;
+  }
+  // 2) 維基百科摘要縮圖
   try {
-    const r = await fetch('https://zh.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(spot.name), { cache:'force-cache' });
+    const r = await fetch('https://zh.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(spot.name), { cache: 'force-cache' });
     if (r.ok) {
       const j = await r.json();
       const url = j.thumbnail?.source || j.originalimage?.source;
-      if (url && await tryImage([url])) return;
+      if (url) {
+        img.onload = () => { img.style.display = 'block'; };
+        img.onerror = () => { img.style.display = 'none'; };
+        img.src = url;
+        return;
+      }
     }
   } catch (_) {}
-
-  // Wikimedia Commons：沒有 Wikipedia 條目時再搜尋圖片。
-  try {
-    const api = 'https://commons.wikimedia.org/w/api.php?action=query&generator=search' +
-      '&gsrnamespace=6&gsrsearch=' + encodeURIComponent((spot.name || '') + ' Taiwan') +
-      '&gsrlimit=5&prop=imageinfo&iiprop=url&iiurlwidth=800&format=json&origin=*';
-    const r = await fetch(api, { cache:'force-cache' });
-    if (r.ok) {
-      const j = await r.json();
-      const urls = Object.values(j.query?.pages || {})
-        .map(p => p.imageinfo?.[0]?.thumburl || p.imageinfo?.[0]?.url)
-        .filter(Boolean);
-      if (await tryImage(urls)) return;
-    }
-  } catch (_) {}
-
-  // 最後顯示替代圖，避免景點卡片直接沒有圖片。
-  const safeName = String(spot.name || '景點').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480"><rect width="100%" height="100%" fill="#17313b"/><text x="50%" y="46%" dominant-baseline="middle" text-anchor="middle" fill="#dce9ed" font-size="34" font-family="sans-serif">${safeName}</text><text x="50%" y="58%" dominant-baseline="middle" text-anchor="middle" fill="#8fa7b8" font-size="20" font-family="sans-serif">暫無可用景點照片</text></svg>`;
-  img.src = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
-  img.style.display = 'block';
+  // 2) 備援：Unsplash 關鍵字（可能較慢）
+  img.onload = () => { img.style.display = 'block'; };
+  img.onerror = () => { img.style.display = 'none'; };
+  img.src = 'https://source.unsplash.com/400x240/?' + q;
 }
 
 function showSpotPanel(spot, index, total) {
@@ -1751,84 +1629,55 @@ function showSpotPanel(spot, index, total) {
     $('#spotPanel').style.display = 'none';
     return;
   }
+  $('#spotBadge').textContent = `導覽 ${index + 1} / ${total}`;
+  $('#spotTitle').textContent = spot.name;
+  const style = transportStyle(currentTransport);
+  $('#spotMeta').textContent =
+    (spot.city || '') +
+    (spot.tags ? ' · ' + spot.tags.join('、') : '') +
+    ' · ' + style.label;
 
-  // 導覽中同一站不要每一幀重建 DOM / 重新載入圖片，
-  // 否則圖片會一直閃爍、文字也會跳動。
-  const panel = $('#spotPanel');
-  const sameSpot = panel.dataset.tourSpot === String(spot.name);
-  const sameMode = panel.dataset.tourMode === (tourPlaying ? 'tour' : 'normal');
+  let body = spot.aiText || spot.desc || '暫無介紹';
+  const official = [
+    spot.address ? `地址：${spot.address}` : '',
+    spot.service ? `開放時間：${spot.service}` : '',
+    spot.fee ? `費用：${spot.fee}` : '',
+    spot.phone ? `電話：${spot.phone}` : '',
+    spot.visit ? `建議停留：${spot.visit}` : ''
+  ].filter(Boolean);
+  if (official.length) body += '\n\n' + official.join('\n');
 
-  if (!sameSpot || !sameMode) {
-    $('#spotBadge').textContent = `導覽 ${index + 1} / ${total}`;
-    $('#spotTitle').textContent = spot.name;
-    const style = transportStyle(currentTransport);
-    $('#spotMeta').textContent =
-      (spot.city || '') +
-      (spot.tags ? ' · ' + spot.tags.join('、') : '') +
-      ' · ' + style.label;
-
-    let body = spot.aiText || spot.desc || '暫無介紹';
-    const official = [
-      spot.address ? `地址：${spot.address}` : '',
-      spot.service ? `開放時間：${spot.service}` : '',
-      spot.fee ? `費用：${spot.fee}` : '',
-      spot.phone ? `電話：${spot.phone}` : '',
-      spot.visit ? `建議停留：${spot.visit}` : ''
-    ].filter(Boolean);
-    if (official.length) body += '\n\n' + official.join('\n');
-    $('#spotBody').textContent = body;
-
-    const note = $('#spotAiNote');
-    if (note) {
-      note.textContent = spot.source
-        ? `${spot.source}｜資料每日更新`
-        : (spot.aiText ? '本段為 AI／智慧規劃解說' : '尚未產生 AI 解說，可先按「Ollama 產生行程」');
-    }
-
-    const tagsEl = $('#spotTags');
-    tagsEl.innerHTML = '';
-    (spot.tags || []).forEach(t => {
-      const span = document.createElement('span');
-      span.className = 'tag';
-      span.textContent = t;
-      tagsEl.appendChild(span);
-    });
-
-    let actions=document.querySelector('#spotActions');
-    if(!actions){
-      actions=document.createElement('div');
-      actions.id='spotActions';
-      actions.className='spot-actions';
-      panel.appendChild(actions);
-    }
-
-    const info=spotInfo(spot.name);
-    if (tourPlaying) {
-      actions.innerHTML=`<div class="tour-nav"><div class="tour-nav-title">導覽控制 · 第 ${index + 1} / ${total} 站</div><button id="prevTourBtn">‹ 上一站</button><button id="nextTourBtn">下一站 ›</button></div>`;
-      const prev=$('#prevTourBtn'), next=$('#nextTourBtn');
-      if(prev) { prev.disabled = index <= 0; prev.onclick=()=>jumpTourStation(-1); }
-      if(next) { next.disabled = index >= total - 1; next.onclick=()=>jumpTourStation(1); }
-    } else {
-      actions.innerHTML=`<button class="primary" id="addSpotBtn">＋ 加入行程</button><button class="sec" id="flySpotBtn">🧭 前往這裡</button>${spot.website?'<button class="sec" id="webSpotBtn" style="grid-column:1/-1">🔗 官方網站</button>':''}`;
-    }
-
-    const webBtn = $('#webSpotBtn');
-    if (webBtn && spot.website) webBtn.onclick=()=>window.open(spot.website,'_blank','noopener');
-    const addBtn = $('#addSpotBtn');
-    if (addBtn) addBtn.onclick=()=>addToItinerary(info||spot);
-    const flyBtn = $('#flySpotBtn');
-    if (flyBtn) flyBtn.onclick=()=>showTravelSpot(spot.name);
-
-    panel.dataset.tourSpot = String(spot.name);
-    panel.dataset.tourMode = tourPlaying ? 'tour' : 'normal';
-
-    // 只有換站時才換圖片，避免每幀重新觸發載入。
-    if (!sameSpot) loadSpotImage(spot);
+  $('#spotBody').textContent = body;
+  const note = $('#spotAiNote');
+  if (note) {
+    note.textContent = spot.source ? `${spot.source}｜資料每日更新` : (spot.aiText ? '本段為 AI／智慧規劃解說' : '尚未產生 AI 解說，可先按「Ollama 產生行程」');
   }
 
-  // 導覽站數可能因手動上一站／下一站改變；只更新小標，不重建整個面板。
-  $('#spotBadge').textContent = `導覽 ${index + 1} / ${total}`;
-  panel.style.display = 'block';
+  const tagsEl = $('#spotTags');
+  tagsEl.innerHTML = '';
+  (spot.tags || []).forEach(t => {
+    const span = document.createElement('span');
+    span.className = 'tag';
+    span.textContent = t;
+    tagsEl.appendChild(span);
+  });
+
+  $('#spotPanel').style.display = 'block';
+  let actions=document.querySelector('#spotActions');
+  if(!actions){ actions=document.createElement('div'); actions.id='spotActions'; actions.className='spot-actions'; $('#spotPanel').appendChild(actions); }
+  const info=spotInfo(spot.name);
+  if (tourPlaying) {
+    actions.innerHTML=`<div class="tour-nav"><div class="tour-nav-title">導覽控制 · 第 ${index + 1} / ${total} 站</div><button id="prevTourBtn">‹ 上一站</button><button id="nextTourBtn">下一站 ›</button></div>`;
+    const prev=$('#prevTourBtn'), next=$('#nextTourBtn');
+    if(prev) { prev.disabled = index <= 0; prev.onclick=()=>jumpTourStation(-1); }
+    if(next) { next.disabled = index >= total - 1; next.onclick=()=>jumpTourStation(1); }
+  } else {
+    actions.innerHTML=`<button class="primary" id="addSpotBtn">＋ 加入行程</button><button class="sec" id="flySpotBtn">🧭 前往這裡</button>${spot.website?'<button class="sec" id="webSpotBtn" style="grid-column:1/-1">🔗 官方網站</button>':''}`;
+  }
+  if (spot.website) $('#webSpotBtn').onclick=()=>window.open(spot.website,'_blank','noopener');
+  $('#addSpotBtn').onclick=()=>addToItinerary(info||spot);
+  $('#flySpotBtn').onclick=()=>showTravelSpot(spot.name);
+  loadSpotImage(spot);
 }
 
 function hideSpotPanel() {
@@ -1856,21 +1705,16 @@ function clearTourTargetLabel() {
 function jumpTourStation(delta) {
   if (!tourPlaying || !tourList.length) return;
   const nextSeg = Math.max(0, Math.min(tourList.length - 1, seg + delta));
-  if (nextSeg === seg || !pathPts[nextSeg]) return;
-
-  // 上一站／下一站與自動導覽一樣採「飛行」過去，不再瞬移。
-  manualFlyFrom = pathPts[seg]?.clone?.() || pathPts[seg];
-  manualFlyTo = pathPts[nextSeg].clone();
-  manualFlyTargetIndex = nextSeg;
+  if (nextSeg === seg) return;
   seg = nextSeg;
   segT = 0;
-  tourPhase = 'manualFly';
-
-  const spot = tourList[nextSeg];
+  tourPhase = 'stay';
+  const spot = tourList[seg];
+  const point = pathPts[seg];
+  if (point) camLookAt(point, 52, 0.4);
   setTourTargetLabel(spot);
-  setTourTownOnly(spot);
-  $('#tourBar').textContent = '✈ 前往 ' + spot.name + '（第 ' + (nextSeg + 1) + ' / ' + tourList.length + ' 站）';
-  showSpotPanel(spot, nextSeg, tourList.length);
+  $('#tourBar').textContent = '📍 ' + spot.name + '（第 ' + (seg + 1) + ' / ' + tourList.length + ' 站）';
+  showSpotPanel(spot, seg, tourList.length);
 }
 
 function setTourTargetLabel(spot) {
@@ -1912,16 +1756,10 @@ function setTourUi(active) {
 
 function endTour() {
   tourPlaying = false;
-  focusedSpotOnly = false;
-  manualFlyFrom = manualFlyTo = null;
-  manualFlyTargetIndex = -1;
   clearTourTargetLabel();
   tourTargetGroup.visible = false;
   controls.enabled = true;
-  tourManualPauseUntil = 0;
   setTourUi(false);
-  $('#spotPanel').dataset.tourSpot = '';
-  $('#spotPanel').dataset.tourMode = '';
   $('#tourBar').textContent = '導覽結束';
   setTimeout(() => {
     $('#tourBar').style.display = 'none';
@@ -1934,18 +1772,14 @@ function endTour() {
   controls.update();
 }
 
-let tourManualPauseUntil = 0;
-
 function startTour() {
   if (!tourList.length) return;
   pathPts = showRoute(tourList, currentTransport);
   if (!pathPts.length) return;
   tourPlaying = true;
-  focusedSpotOnly = true;
   tourPhase = 'stay';
   seg = 0; segT = 0;
-  controls.enabled = true;
-  tourManualPauseUntil = 0;
+  controls.enabled = false;
   $('#btnTour').disabled = true;
   $('#btnPlan').disabled = true;
   setTourUi(true);
@@ -1955,34 +1789,26 @@ function startTour() {
   camLookAt(pathPts[0], 55, 0.42);
 }
 
-function updateTour(dt, now=performance.now()) {
+function updateTour(dt) {
   if (!tourPlaying || !pathPts.length) return;
-  if (now < tourManualPauseUntil) return;
-
-  // 每個景點總共顯示 10 秒：
-  // 前 8.5 秒停留，最後 1.5 秒平滑移動到下一站。
-  const T_STAY = 8.5;
-  const T_OUT = 0.35;
-  const T_FLY = 0.8;
-  const T_IN = 0.35;
+  // 停留 → 微微拉遠 → 飛往下一站 → 放大抵達
+  const T_STAY = 3.2;
+  const T_OUT = 1.1;
+  const T_FLY = 2.6;
+  const T_IN = 1.2;
 
   segT += dt;
   const from = pathPts[Math.min(seg, pathPts.length - 1)];
   const to = pathPts[Math.min(seg + 1, pathPts.length - 1)];
   const spot = tourList[Math.min(seg, tourList.length - 1)];
   const style = transportStyle(currentTransport);
+  const flyBoost = /飛|航|機/.test(currentTransport || '') ? 1.25 : 1;
 
   if (tourPhase === 'stay') {
-    // 只在剛抵達這一站時設定一次鏡頭；不要每幀 camLookAt，
-    // 這樣使用者可以拖曳、旋轉、縮放而不會被鏡頭搶回去。
-    if (segT < dt * 1.5) {
-      camLookAt(from, 52, 0.4);
-    }
+    camLookAt(from, 52, 0.4);
     setTourTargetLabel(spot);
-    setTourTownOnly(spot);
-    $('#tourBar').textContent = '📍 ' + spot.name + `（停留 ${Math.max(0,Math.ceil(T_STAY-segT))} 秒）`;
+    $('#tourBar').textContent = '📍 ' + spot.name + '（停留）';
     showSpotPanel(spot, seg, tourList.length);
-
     if (segT >= T_STAY) {
       if (seg >= pathPts.length - 1) {
         endTour();
@@ -1994,76 +1820,42 @@ function updateTour(dt, now=performance.now()) {
   } else if (tourPhase === 'zoomOut') {
     const t = Math.min(1, segT / T_OUT);
     const ease = t * t * (3 - 2 * t);
-    const dist = 52 + 25 * ease;
-    camLookAt(from, dist, 0.38 + 0.04 * ease);
-    $('#tourBar').textContent = '前往下一站…';
+    const dist = 52 + 70 * ease; // 微微縮小（拉遠）
+    camLookAt(from, dist, 0.38 + 0.12 * ease);
+    $('#tourBar').textContent = '準備前往下一站…';
     if (t >= 1) { tourPhase = 'fly'; segT = 0; }
   } else if (tourPhase === 'fly') {
-    const t = Math.min(1, segT / T_FLY);
+    const t = Math.min(1, segT / (T_FLY * flyBoost));
     const ease = t * t * (3 - 2 * t);
     const cur = new THREE.Vector3().lerpVectors(from, to, ease);
+    // 飛行高度依交通
     cur.y += style.arc * Math.sin(Math.PI * ease);
-    camLookAt(cur, 77, 0.45);
+    const dist = 120 - 30 * Math.sin(Math.PI * ease); // 途中較遠
+    camLookAt(cur, dist, 0.5);
     const next = tourList[seg + 1];
     setTourTargetLabel(next);
-    setTourTownOnly(next);
     $('#tourBar').textContent = style.label + ' → ' + next.name;
+    if (t > 0.6) showSpotPanel(next, seg + 1, tourList.length);
     if (t >= 1) { tourPhase = 'zoomIn'; segT = 0; }
   } else if (tourPhase === 'zoomIn') {
     const next = tourList[seg + 1];
     setTourTargetLabel(next);
-    setTourTownOnly(next);
     const t = Math.min(1, segT / T_IN);
     const ease = t * t * (3 - 2 * t);
-    const dist = 77 - 25 * ease;
+    const dist = 120 - 68 * ease; // 放大靠近
     camLookAt(to, dist, 0.42);
     $('#tourBar').textContent = '📍 抵達 ' + next.name;
     if (t >= 1) {
       seg++;
       segT = 0;
       tourPhase = 'stay';
-      setTourTownOnly(tourList[seg]);
       showSpotPanel(tourList[seg], seg, tourList.length);
-    }
-  } else if (tourPhase === 'manualFly') {
-    const next = tourList[manualFlyTargetIndex];
-    if (!next || !manualFlyFrom || !manualFlyTo) {
-      tourPhase = 'stay';
-      segT = 0;
-      return;
-    }
-    const T_MANUAL = 1.25;
-    const t = Math.min(1, segT / T_MANUAL);
-    const ease = t * t * (3 - 2 * t);
-    const cur = new THREE.Vector3().lerpVectors(manualFlyFrom, manualFlyTo, ease);
-    cur.y += transportStyle(currentTransport).arc * 0.7 * Math.sin(Math.PI * ease);
-    // 飛行途中只保留「要前往的目標鄉鎮／景點」，避免畫面重新冒出其他標籤。
-    setTourTargetLabel(next);
-    setTourTownOnly(next);
-    camLookAt(cur, 77 - 25 * ease, 0.45);
-    $('#tourBar').textContent = '✈ 前往 ' + next.name + '（' + Math.ceil((1 - t) * T_MANUAL) + ' 秒）';
-    if (t >= 1) {
-      manualFlyFrom = manualFlyTo = null;
-      manualFlyTargetIndex = -1;
-      segT = 0;
-      tourPhase = 'stay';
-      setTourTargetLabel(next);
-      setTourTownOnly(next);
-      showSpotPanel(next, seg, tourList.length);
     }
   }
 }
 
 $('#btnPlan').onclick = () => { plan(); };
-try {
-  const u = localStorage.getItem('tw_ollama_url');
-  const m = localStorage.getItem('tw_ollama_model');
-  if (u && $('#ollamaUrl')) $('#ollamaUrl').value = u;
-  if (m && $('#ollamaModel')) $('#ollamaModel').value = m;
-} catch (_) {}
 $('#btnTour').onclick = startTour;
-$('#tourStop').onclick = endTour;
-controls.addEventListener('start', () => { if (tourPlaying) tourManualPauseUntil = performance.now() + 2500; });
 $('#cityAll').onclick = () => {
   document.querySelectorAll('input[name="city"]').forEach(el => { el.checked = true; });
 };
@@ -2106,7 +1898,7 @@ let last = performance.now();
   requestAnimationFrame(animate);
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  if (tourPlaying) updateTour(dt, now);
+  if (tourPlaying) updateTour(dt);
   else controls.update();
   updateTownLabelLOD();
   renderer.render(scene, camera);
